@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">app-design2</string>
+    <string name="action_switchcam">Switch Camera</string>
 
     <!-- Strings related to Capture Photo -->
     <string name="take_button">Take</string>
@@ -7,7 +8,18 @@
 
     <!-- Strings related to Settings -->
 
-    <!-- Preference settings -->
+    <!-- My features -->
+    <string name="pref_header_profile">My profile setting</string>
+
+    <string name="pref_title_set_my_photo_1">Upload your photo/video 1</string>
+
+    <string name="pref_title_set_my_photo_2">Upload your photo/video 2</string>
+
+    <string name="pref_title_set_my_photo_3">Upload your photo/video 3</string>
+    
+    <string name="pref_title_set_my_feature">Upload your features</string>
+    
+    <!-- Privacy preferences -->
     <string name="pref_header_preference">Privacy preference setting</string>
 
     <string name="pref_title_yes_gesture">Enable Yes gesture</string>
@@ -67,15 +79,12 @@
         <item>0</item>
         <item>1</item>
     </string-array>
+    
+    <!-- Other's feature-->
+    <string name="pref_description_others_photo_capture">Upload features of the person you do not want to being photographed with</string>
+    <string name="pref_title_others_photo_capture">Capture other\'s features</string>
 
-    <!-- Settings for Profile -->
-    <string name="pref_header_profile">My profile setting</string>
-
-    <string name="pref_title_set_my_photo_1">Upload your photo/video 1</string>
-
-    <string name="pref_title_set_my_photo_2">Upload your photo/video 2</string>
-
-    <string name="pref_title_set_my_photo_3">Upload your photo/video 3</string>
-
+    <string name="pref_description_others_photo_select">Upload features of the person you do not want to being photographed with</string>
+    <string name="pref_title_others_photo_select">Select other\'s features</string>
 
 </resources>

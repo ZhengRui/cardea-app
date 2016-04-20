@@ -27,6 +27,7 @@ public class MediaActivity extends Activity {
     public static final int MEDIA_TYPE_IMAGE = 1;
     public static final int MEDIA_TYPE_VIDEO = 2;
     public static final String EXTRA_FILE_URI = "com.example.jiayu.app_design2.MediaActivity.FileUri";
+    public static final String NUM_OF_FEATURE = "com.example.jiayu.app_design2.MediaActivity.NumOfFeature";
 
     private Button mbtnCapture;
     private Button mbtnSelect;
@@ -34,10 +35,12 @@ public class MediaActivity extends Activity {
     private Uri fileUri;
     private String imgPath;
     private Bitmap bmp;
+    private int numOfFeature = 0;
 
     private void setFileUri(String imgPath) {
         Intent data = new Intent();
         data.putExtra(EXTRA_FILE_URI, imgPath);
+        data.putExtra(NUM_OF_FEATURE, numOfFeature);
         setResult(RESULT_OK, data);
     }
 
