@@ -2,9 +2,11 @@
       xmlns:app="http://schemas.android.com/apk/res-auto"
       xmlns:tools="http://schemas.android.com/tools"
       tools:context="com.example.jiayu.app_design2.MainActivity">
+    <!--
     <item
         android:id="@+id/action_switchcam"
         android:orderInCategory="100"
         android:title="@string/action_switchcam"
         app:showAsAction="never"/>
+        -->
 </menu>

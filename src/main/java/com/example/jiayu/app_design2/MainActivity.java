@@ -1,16 +1,26 @@
 package com.example.jiayu.app_design2;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.SweepGradient;
+import android.graphics.drawable.Drawable;
 import android.hardware.Camera;
+import android.hardware.SensorManager;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.support.v7.app.AppCompatActivity;
+import android.text.Spannable;
+import android.text.SpannableString;
+import android.text.style.ImageSpan;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.OrientationEventListener;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -18,12 +28,20 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import com.github.clans.fab.FloatingActionButton;
+import com.kyleduo.switchbutton.SwitchButton;
+import com.rzheng.fdlib.FaceDetector;
+import com.sh1r0.caffe_android_lib.CaffeMobile;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+
+import cn.pedant.SweetAlert.SweetAlertDialog;
 
 /**
  * Created by Jiayu on 19/3/16.
@@ -43,12 +61,88 @@ public class MainActivity extends AppCompatActivity {
     private boolean mCameraConfigured = false;
     private Camera.Size size;
     private int front1back0 = 0;
-    //private byte[] callbackBuffer;
 
-    private Button mBtnTake;
-    private Button mBtnSettings;
+//    private Button mBtnTake;
+    private FloatingActionButton mFabBtnTake;
+//    private Button mBtnSettings;
+    private FloatingActionButton mFabBtnSettings;
     private Button mBtnShow;
+    private SwitchButton camSwitchBtn;
+    private SwitchButton modeSwitchBtn;
     //private Uri fileUri;
+
+    private static FaceDetector fdetector;
+    private static CaffeMobile caffeFace, caffeScene;
+    private static boolean isloaded = true;
+    private int batchSize = 10;
+
+    private int orientCase = 0;
+    private static final String DATA_PATH = Environment.getExternalStorageDirectory().toString() + "/ContextPrivacy/";
+    private String landmarksFilePath = DATA_PATH + "shape_predictor_68_face_landmarks.dat";
+    private String faceProtoPath = DATA_PATH + "LightenedCNN_B_deploy.prototxt";
+    private String faceModelPath = DATA_PATH + "LightenedCNN_B.caffemodel";
+    private String sceneProtoPath = DATA_PATH + "deploy-concat.prototxt";
+    private String sceneModelPath = DATA_PATH + "concat_0.599.caffemodel";
+
+    private OrientationEventListener mOrientationListener;
+    private SweetAlertDialog loadingDialog;
+
+    static {
+        System.loadLibrary("facedet");
+        System.loadLibrary("caffe");
+        System.loadLibrary("caffe_jni");
+    }
+
+    private void initialize() {
+        File cascadeDir = getDir("cascade", Context.MODE_PRIVATE);
+        File cascadeFile = new File(cascadeDir, "haarcascade_frontalface_alt.xml");
+        if (!cascadeFile.exists()) {
+            InputStream is = getResources().openRawResource(R.raw.haarcascade_frontalface_alt);
+            try {
+                FileOutputStream os = new FileOutputStream(cascadeFile);
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                try {
+                    while ((bytesRead = is.read(buffer)) != -1) {
+                        os.write(buffer, 0, bytesRead);
+                    }
+                    is.close();
+                    os.close();
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            }
+        }
+        fdetector = new FaceDetector(cascadeFile.getAbsolutePath(), batchSize);
+        fdetector.loadShapePredictor(landmarksFilePath);
+
+        caffeFace = new CaffeMobile();
+        caffeFace.setNumThreads(2);
+        caffeFace.loadModel(faceProtoPath, faceModelPath);
+
+        caffeScene = new CaffeMobile();
+        caffeScene.setNumThreads(2);
+        caffeScene.loadModel(sceneProtoPath, sceneModelPath);
+    }
+
+    private class initializeTask extends AsyncTask<Void, Void, Boolean> {
+
+        @Override
+        protected Boolean doInBackground(Void... params) {
+            initialize();
+            return true;
+        }
+
+        protected void onPostExecute(Boolean ready) {
+            // take button enabled
+            Log.i(TAG, "All models are loaded.");
+            isloaded = true;
+            loadingDialog.dismissWithAnimation();
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,8 +153,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main_layout);
 
-        mBtnTake = (Button) findViewById(R.id.button_take_photo);
-        mBtnTake.setOnClickListener(new Button.OnClickListener() {
+//        mBtnTake = (Button) findViewById(R.id.button_take_photo);
+//        mBtnTake.setOnClickListener(new Button.OnClickListener() {
+        mFabBtnTake = (FloatingActionButton) findViewById(R.id.fab_button_take_photo);
+        mFabBtnTake.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (mCamera != null) {
@@ -76,14 +172,19 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        mBtnSettings = (Button) findViewById(R.id.button_settings);
-        mBtnSettings.setOnClickListener(new Button.OnClickListener() {
+//        mBtnSettings = (Button) findViewById(R.id.button_settings);
+//        mBtnSettings.setOnClickListener(new Button.OnClickListener() {
+        mFabBtnSettings = (FloatingActionButton) findViewById(R.id.fab_button_settings);
+        mFabBtnSettings.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v) {
                 Intent i = new Intent(MainActivity.this, SettingsSimplifiedActivity.class);
                 startActivityForResult(i, REQUEST_SETTINGS);
             }
         });
+
+
+
 
         mBtnShow = (Button) findViewById(R.id.button_show_settings);
         mBtnShow.setOnClickListener(new Button.OnClickListener() {
@@ -98,6 +199,51 @@ public class MainActivity extends AppCompatActivity {
         mSurfaceView = (SurfaceView)findViewById(R.id.surfaceView);
         mHolder = mSurfaceView.getHolder();
         mHolder.addCallback(surfaceCallback);
+
+
+        camSwitchBtn = (SwitchButton) findViewById(R.id.camswitch);
+        camSwitchBtn.setOnClickListener(new Button.OnClickListener() {
+            public void onClick(View v) {
+                switchCam();
+            }
+
+        });
+
+        modeSwitchBtn = (SwitchButton) findViewById(R.id.modeswitch);
+        modeSwitchBtn.setOnClickListener(new Button.OnClickListener() {
+            public void onClick(View v) {
+                switchMode();
+            }
+
+        });
+
+        mOrientationListener = new OrientationEventListener(this,
+                SensorManager.SENSOR_DELAY_NORMAL) {
+            @Override
+            public void onOrientationChanged(int orientation) {
+                if ((orientation >= 0 && orientation <= 30 ) || (orientation >= 330 && orientation <= 360)) {
+                    orientCase = 0;
+                } else if (orientation >= 60 && orientation <= 120) {
+                    orientCase = 1;
+                } else if (orientation >= 150 && orientation <= 210) {
+                    orientCase = 2;
+                } else if (orientation >= 240 && orientation <= 300) {
+                    orientCase = 3;
+                } else {}
+//                Log.i(TAG, "Orientation changed to " + orientation +
+//                        ", case " + orientCase);
+            }
+        };
+
+        // load model using async task
+        if (!isloaded) {
+            new initializeTask().execute();
+            loadingDialog = new SweetAlertDialog(this, SweetAlertDialog.PROGRESS_TYPE);
+            loadingDialog.getProgressHelper().setBarColor(Color.parseColor("#A5DC86"));
+            loadingDialog.setTitleText("Initializing");
+            loadingDialog.setCancelable(false);
+            loadingDialog.show();
+        }
 
     }
 
@@ -142,19 +288,24 @@ public class MainActivity extends AppCompatActivity {
         if (mCamera != null && mHolder.getSurface() != null) {
             if (!mCameraConfigured) {
                 Camera.Parameters params = mCamera.getParameters();
-                params.setPreviewSize(1920, 1080);
+                size = params.getPreviewSize();
+                for (Camera.Size s : params.getSupportedPreviewSizes()) {   // get 3840x2160 for back cam
+                    if (s.width > size.width)
+                        size = s;
+                }
+                params.setPreviewSize(size.width, size.height);
+                Log.i(TAG, "Preview size: " + size.width + ", " + size.height);
                 params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
                 mCamera.setParameters(params);
-                size = mCamera.getParameters().getPreviewSize();
-                Log.i(TAG, "Preview size: " + size.width + ", " + size.height);
-                //callbackBuffer = new byte[(size.height + size.height / 2) * size.width];
                 mCameraConfigured = true;
+
+                if (mOrientationListener.canDetectOrientation() == true) {
+                    mOrientationListener.enable();
+                }
             }
 
             try {
                 mCamera.setPreviewDisplay(mHolder);
-                //mCamera.addCallbackBuffer(callbackBuffer);
-                //mCamera.setPreviewCallbackWithBuffer(frameIMGProcCallback);
             } catch (Throwable t) {
                 Log.e(TAG, "Exception in initPreview()", t);
             }
@@ -233,7 +384,8 @@ public class MainActivity extends AppCompatActivity {
         Log.i(TAG, " onResume() called.");
         super.onResume();
         mCamera = Camera.open(front1back0);   // 0 for back, 1 for frontal
-        setCameraDisplayOrientation(MainActivity.this, front1back0, mCamera);
+        mCamera.setDisplayOrientation(90);
+//        setCameraDisplayOrientation(MainActivity.this, front1back0, mCamera);
 
         startPreview();
     }
@@ -244,10 +396,11 @@ public class MainActivity extends AppCompatActivity {
         if (mInPreview) {
             mCamera.stopPreview();
         }
-        //mCamera.setPreviewCallbackWithBuffer(null);
         mCamera.release();
         mCamera = null;
         mInPreview = false;
+        mCameraConfigured = false; // otherwise cannot refocus after onResume
+        mOrientationListener.disable();
         super.onPause();
     }
 
@@ -257,6 +410,7 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
+    /* use button to switch camera
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
@@ -279,6 +433,7 @@ public class MainActivity extends AppCompatActivity {
 
         return super.onOptionsItemSelected(item);
     }
+    */
 
     @Override
     protected void onSaveInstanceState(Bundle savedInstanceState) {
@@ -297,13 +452,19 @@ public class MainActivity extends AppCompatActivity {
 
         front1back0 = 1 - front1back0;
         mCamera = Camera.open(front1back0);   // 0 for back, 1 for frontal
-        //mCamera.setDisplayOrientation(90);
-        setCameraDisplayOrientation(MainActivity.this, front1back0, mCamera);
-        initPreview(1920, 1080);
+        mCamera.setDisplayOrientation(90);
+//        setCameraDisplayOrientation(MainActivity.this, front1back0, mCamera);
+        initPreview(size.width, size.height);
         startPreview();
 
     }
 
+    private void switchMode() {
+
+    }
+
+
+    /* fixed mCamera.setDisplayOrientation(90)
     private void setCameraDisplayOrientation(Activity activity, int cameraId, Camera camera) {
         Camera.CameraInfo info = new Camera.CameraInfo();
         Camera.getCameraInfo(cameraId, info);
@@ -329,5 +490,6 @@ public class MainActivity extends AppCompatActivity {
         }
         camera.setDisplayOrientation(result);
     }
+    */
 }
 
