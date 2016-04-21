@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:orientation="vertical"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent">
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" >
 
     <SurfaceView
         android:layout_width="match_parent"
@@ -10,14 +11,7 @@
         android:id="@+id/surfaceView"
         android:layout_gravity="center_horizontal"/>
 
-
-    <Button
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Take photo"
-        android:id="@+id/button_take_photo"
-        android:layout_gravity="bottom|left"/>
-
+    <!--
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -28,8 +22,91 @@
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:text="Take photo"
+        android:id="@+id/button_take_photo"
+        android:layout_gravity="center_horizontal|bottom"/>
+        -->
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:text="Show settings"
         android:id="@+id/button_show_settings"
-        android:layout_gravity="bottom|right"/>
+        android:layout_gravity="left|top"/>
+
+
+    <com.github.clans.fab.FloatingActionButton
+            android:id="@+id/fab_button_take_photo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="30dp"
+            android:src="@drawable/ic_take_picture_mid"
+            app:fab_colorNormal="#30FF5449"
+            app:fab_colorPressed="#70E75043"
+            app:fab_colorRipple="#80FFFFFF"
+            app:fab_showShadow="true"
+            app:fab_shadowColor="#66000000"
+            app:fab_shadowRadius="4dp"
+            app:fab_shadowXOffset="1dp"
+            app:fab_shadowYOffset="3dp"
+            app:fab_size="normal"
+            app:fab_showAnimation="@anim/fab_scale_up"
+            app:fab_hideAnimation="@anim/fab_scale_down"
+            app:fab_label=""
+            app:fab_progress_color="#FF009688"
+            app:fab_progress_backgroundColor="#4D000000"
+            app:fab_progress_indeterminate="false"
+            app:fab_progress_max="100"
+            app:fab_progress="0"
+            app:fab_progress_showBackground="true"/>
+
+    <com.github.clans.fab.FloatingActionButton
+        android:id="@+id/fab_button_settings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="right|bottom"
+        android:layout_marginRight="10dp"
+        android:layout_marginBottom="46dp"
+        android:src="@drawable/ic_action_settings"
+        app:fab_colorNormal="#30FF5449"
+        app:fab_colorPressed="#70E75043"
+        app:fab_colorRipple="#80FFFFFF"
+        app:fab_size="mini" />
+
+    <com.kyleduo.switchbutton.SwitchButton
+        android:id="@+id/modeswitch"
+        style="@style/SwitchButtonStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:textColor="#FF5449"
+        android:textStyle="bold"
+        android:checked="true"
+        app:kswThumbWidth="22dp"
+        app:kswThumbHeight="22dp"
+        app:kswThumbMargin="4dp"
+        app:kswTintColor="#30FF5449"
+        app:kswTextOff="W"
+        app:kswTextOn="S"
+        android:layout_gravity="right|top" />
+
+    <com.kyleduo.switchbutton.SwitchButton
+        android:id="@+id/camswitch"
+        style="@style/SwitchButtonStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="120dp"
+        android:textColor="#FF5449"
+        android:textStyle="bold"
+        android:checked="true"
+        app:kswThumbWidth="22dp"
+        app:kswThumbHeight="22dp"
+        app:kswThumbMargin="4dp"
+        app:kswTintColor="#30FF5449"
+        app:kswTextOff="F"
+        app:kswTextOn="B"
+        android:layout_gravity="right|bottom" />
+
 
 </FrameLayout>
