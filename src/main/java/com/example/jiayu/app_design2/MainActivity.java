@@ -46,7 +46,7 @@ import cn.pedant.SweetAlert.SweetAlertDialog;
 /**
  * Created by Jiayu on 19/3/16.
  */
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
     private static final String TAG = "MainActivity";
     private static final int REQUEST_TAKE_PHOTO = 100;
     private static final int REQUEST_SETTINGS = 200;
@@ -60,7 +60,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean mInPreview = false;
     private boolean mCameraConfigured = false;
     private Camera.Size size;
-    private int front1back0 = 0;
+    private static int front1back0 = 0;
 
 //    private Button mBtnTake;
     private FloatingActionButton mFabBtnTake;
@@ -71,12 +71,13 @@ public class MainActivity extends AppCompatActivity {
     private SwitchButton modeSwitchBtn;
     //private Uri fileUri;
 
-    private static FaceDetector fdetector;
-    private static CaffeMobile caffeFace, caffeScene;
-    private static boolean isloaded = true;
-    private int batchSize = 10;
+    public static FaceDetector fdetector;
+    public static int batchSize = 5;
+    public static CaffeMobile caffeFace;
+    private static CaffeMobile caffeScene;
 
-    private int orientCase = 0;
+    private int orientCase;
+
     private static final String DATA_PATH = Environment.getExternalStorageDirectory().toString() + "/ContextPrivacy/";
     private String landmarksFilePath = DATA_PATH + "shape_predictor_68_face_landmarks.dat";
     private String faceProtoPath = DATA_PATH + "LightenedCNN_B_deploy.prototxt";
@@ -116,16 +117,22 @@ public class MainActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
         }
-        fdetector = new FaceDetector(cascadeFile.getAbsolutePath(), batchSize);
-        fdetector.loadShapePredictor(landmarksFilePath);
+        if (fdetector == null) {
+            fdetector = new FaceDetector(cascadeFile.getAbsolutePath(), batchSize);
+            fdetector.loadShapePredictor(landmarksFilePath);
+        }
 
-        caffeFace = new CaffeMobile();
-        caffeFace.setNumThreads(2);
-        caffeFace.loadModel(faceProtoPath, faceModelPath);
+        if (caffeFace == null) {
+            caffeFace = new CaffeMobile();
+            caffeFace.setNumThreads(2);
+            caffeFace.loadModel(faceProtoPath, faceModelPath);
+        }
 
-        caffeScene = new CaffeMobile();
-        caffeScene.setNumThreads(2);
-        caffeScene.loadModel(sceneProtoPath, sceneModelPath);
+        if (caffeScene == null) {
+            caffeScene = new CaffeMobile();
+            caffeScene.setNumThreads(2);
+            caffeScene.loadModel(sceneProtoPath, sceneModelPath);
+        }
     }
 
     private class initializeTask extends AsyncTask<Void, Void, Boolean> {
@@ -139,7 +146,6 @@ public class MainActivity extends AppCompatActivity {
         protected void onPostExecute(Boolean ready) {
             // take button enabled
             Log.i(TAG, "All models are loaded.");
-            isloaded = true;
             loadingDialog.dismissWithAnimation();
         }
     }
@@ -202,6 +208,7 @@ public class MainActivity extends AppCompatActivity {
 
 
         camSwitchBtn = (SwitchButton) findViewById(R.id.camswitch);
+        camSwitchBtn.setChecked( front1back0 == 0 ? true : false);
         camSwitchBtn.setOnClickListener(new Button.OnClickListener() {
             public void onClick(View v) {
                 switchCam();
@@ -236,7 +243,7 @@ public class MainActivity extends AppCompatActivity {
         };
 
         // load model using async task
-        if (!isloaded) {
+        if (fdetector == null || caffeFace == null || caffeScene == null) {
             new initializeTask().execute();
             loadingDialog = new SweetAlertDialog(this, SweetAlertDialog.PROGRESS_TYPE);
             loadingDialog.getProgressHelper().setBarColor(Color.parseColor("#A5DC86"));

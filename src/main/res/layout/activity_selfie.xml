@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    tools:context="com.example.jiayu.app_design2.SelfieActivity">
+
+    <SurfaceView
+        android:id="@+id/selfiePreview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center_horizontal"/>
+
+
+    <com.kyleduo.switchbutton.SwitchButton
+        android:id="@+id/selfieSwitchCamBtn"
+        style="@style/SwitchButtonStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#FF5449"
+        android:textStyle="bold"
+        android:checked="true"
+        app:kswThumbWidth="22dp"
+        app:kswThumbHeight="22dp"
+        app:kswThumbMargin="4dp"
+        app:kswTintColor="#30FF5449"
+        app:kswTextOff="F"
+        app:kswTextOn="B"
+        android:layout_gravity="right|bottom"
+        android:layout_below="@+id/featureExtractProgressBar"
+        android:layout_alignParentEnd="true" />
+
+    <com.daimajia.numberprogressbar.NumberProgressBar
+        android:id="@+id/alignCacheProgressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp" />
+
+    <com.daimajia.numberprogressbar.NumberProgressBar
+        android:id="@+id/featureExtractProgressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/alignCacheProgressBar"
+        android:layout_alignParentStart="true" />
+
+</RelativeLayout>

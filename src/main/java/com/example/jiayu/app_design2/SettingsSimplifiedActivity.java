@@ -135,7 +135,7 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
                 //       "com.example.jiayu.app_design2.MediaActivity");
                 //Intent i = new Intent();
                 //i.setComponent(comp);
-                Intent i = new Intent(SettingsSimplifiedActivity.this, MediaActivity.class);
+                Intent i = new Intent(SettingsSimplifiedActivity.this, SelfieActivity.class);
                 startActivityForResult(i, REQUEST_UPLOAD_MY);
 
                 return true;
@@ -146,7 +146,7 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         preferenceCapture.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference preference) {
-                Intent i = new Intent(SettingsSimplifiedActivity.this, MediaActivity.class);
+                Intent i = new Intent(SettingsSimplifiedActivity.this, SelfieActivity.class);
                 startActivityForResult(i, REQUEST_UPLOAD_HIS_CAPTURE);
 
                 return true;
