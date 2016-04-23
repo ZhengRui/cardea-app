@@ -61,7 +61,6 @@ public class SelfieActivity extends Activity {
     private OrientationEventListener mOrientationListener;
     private SweetAlertDialog loadingDialog;
 
-    private jniCaffeThread jniCaffeTH;
     private float[][] batchFaceFeatures;
     private List<float[]> totalFaceFeatures = new ArrayList<float[]>();
 
@@ -140,9 +139,8 @@ public class SelfieActivity extends Activity {
             }
 
             if (MainActivity.caffeFace == null) {
-                MainActivity.caffeFace = new CaffeMobile();
+                MainActivity.caffeFace = new CaffeMobile(faceProtoPath, faceModelPath);
                 MainActivity.caffeFace.setNumThreads(2);
-                MainActivity.caffeFace.loadModel(faceProtoPath, faceModelPath);
             }
 
             fdetector = MainActivity.fdetector;
@@ -189,6 +187,9 @@ public class SelfieActivity extends Activity {
                 mDraw.invalidate();
                 alignCacheProgressBar.setProgress(alignedFacesCacheNum < batchSize ? alignedFacesCacheNum * (100 / batchSize) : 100);
                 featureExtractProgressBar.setProgress(totalFaceFeatures.size());
+
+                if (fcaffeReady && alignedFacesCacheNum >= batchSize )
+                    new featExtractTask().execute();
             }
         }
     };
@@ -218,22 +219,6 @@ public class SelfieActivity extends Activity {
         }
     }
 
-    private class jniCaffeThread extends Thread {
-        public void run() {
-            while(shouldContinue) {
-                if (fcaffeReady && alignedFacesCacheNum >= batchSize) {
-                    extractAndSendFeatures();
-                } else {
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-        }
-    }
-
     private void frameProc(byte[] framedata) {
         if (alignedFacesCacheNum < batchSize) {
             //Log.i(TAG, "Upper stream size: " + size.width + " X " + size.height + " Length: " + framedata.length);
@@ -250,12 +235,26 @@ public class SelfieActivity extends Activity {
             alignedFacesCacheNum += alignedFacesCacheNum < batchSize ? faceArr.length / 4 : 0;
             Log.i(TAG, "AF Cache Size: " + alignedFacesCacheNum);
         } else {
-            faceArr = new int[] {};
             try {
-                Thread.sleep(1000);
+                Thread.sleep(10000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+        }
+    }
+
+    private class featExtractTask extends AsyncTask<Void, Void, Boolean> {
+
+        @Override
+        protected Boolean doInBackground(Void... params) {
+            extractAndSendFeatures();
+            return true;
+        }
+
+        protected void onPostExecute(Boolean ready) {
+            // take button enabled
+            alignedFacesCacheNum = 0;
+            Log.i(TAG, "All models are loaded.");
         }
     }
 
@@ -269,8 +268,6 @@ public class SelfieActivity extends Activity {
 //        }
         for (int i=0; i < batchFaceFeatures.length; i++)
             totalFaceFeatures.add(batchFaceFeatures[i]);
-
-        alignedFacesCacheNum = 0;
     }
 
     private void initPreview(int width, int height) {
@@ -319,8 +316,6 @@ public class SelfieActivity extends Activity {
                 jniFaceTH = new jniFaceThread();
                 shouldContinue = true;
                 jniFaceTH.start();
-                jniCaffeTH = new jniCaffeThread();
-                jniCaffeTH.start();
             }
 
             mCameraConfigured = true;
@@ -357,7 +352,6 @@ public class SelfieActivity extends Activity {
         mInPreview = false;
         shouldContinue = false;
         jniFaceTH = null;
-        jniCaffeTH = null;
         mCameraConfigured = false;
         // sm.unregisterListener(sListener);
         mOrientationListener.disable();

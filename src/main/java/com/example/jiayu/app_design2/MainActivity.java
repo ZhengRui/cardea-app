@@ -72,7 +72,7 @@ public class MainActivity extends Activity {
     //private Uri fileUri;
 
     public static FaceDetector fdetector;
-    public static int batchSize = 5;
+    public static int batchSize = 10;
     public static CaffeMobile caffeFace;
     private static CaffeMobile caffeScene;
 
@@ -123,15 +123,13 @@ public class MainActivity extends Activity {
         }
 
         if (caffeFace == null) {
-            caffeFace = new CaffeMobile();
+            caffeFace = new CaffeMobile(faceProtoPath, faceModelPath);
             caffeFace.setNumThreads(2);
-            caffeFace.loadModel(faceProtoPath, faceModelPath);
         }
 
         if (caffeScene == null) {
-            caffeScene = new CaffeMobile();
+            caffeScene = new CaffeMobile(sceneProtoPath, sceneModelPath);
             caffeScene.setNumThreads(2);
-            caffeScene.loadModel(sceneProtoPath, sceneModelPath);
         }
     }
 
@@ -244,6 +242,14 @@ public class MainActivity extends Activity {
 
         // load model using async task
         if (fdetector == null || caffeFace == null || caffeScene == null) {
+
+            if (fdetector == null)
+                Log.i(TAG, "damn1");
+            if (caffeFace == null)
+                Log.i(TAG, "damn2");
+            if (caffeScene == null)
+                Log.i(TAG, "damn3");
+
             new initializeTask().execute();
             loadingDialog = new SweetAlertDialog(this, SweetAlertDialog.PROGRESS_TYPE);
             loadingDialog.getProgressHelper().setBarColor(Color.parseColor("#A5DC86"));
