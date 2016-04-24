@@ -94,7 +94,7 @@ public class MainActivity extends Activity {
     private SwitchButton modeSwitchBtn;
 
     public static FaceDetector fdetector;
-    public static int batchSize = 10;
+    public static int batchSize = 1;
     public static CaffeMobile caffeFace;
     private static CaffeMobile caffeScene;
 
@@ -215,13 +215,6 @@ public class MainActivity extends Activity {
         /**
         // load model using async task
         if (fdetector == null || caffeFace == null || caffeScene == null) {
-
-            if (fdetector == null)
-                Log.i(TAG, "damn1");
-            if (caffeFace == null)
-                Log.i(TAG, "damn2");
-            if (caffeScene == null)
-                Log.i(TAG, "damn3");
 
             new initializeTask().execute();
             loadingDialog = new SweetAlertDialog(this, SweetAlertDialog.PROGRESS_TYPE);
@@ -456,6 +449,7 @@ public class MainActivity extends Activity {
                 Camera.Parameters params = mCamera.getParameters();
                 size = params.getPreviewSize();
                 for (Camera.Size s : params.getSupportedPreviewSizes()) {   // get 3840x2160 for back cam
+//                    Log.i(TAG, "Supported preview size: " + s.width + ", " + s.height);
                     if (s.width > size.width)
                         size = s;
                 }
