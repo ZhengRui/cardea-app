@@ -20,28 +20,21 @@
         android:layout_height="wrap_content"
         android:textColor="#FF5449"
         android:textStyle="bold"
-        android:checked="true"
         app:kswThumbWidth="22dp"
         app:kswThumbHeight="22dp"
         app:kswThumbMargin="4dp"
         app:kswTintColor="#30FF5449"
-        app:kswTextOff="F"
-        app:kswTextOn="B"
+        app:kswTextOff="B"
+        app:kswTextOn="F"
         android:layout_gravity="right|bottom"
         android:layout_below="@+id/featureExtractProgressBar"
-        android:layout_alignParentEnd="true" />
-
-    <com.daimajia.numberprogressbar.NumberProgressBar
-        android:id="@+id/alignCacheProgressBar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp" />
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="42dp" />
 
     <com.daimajia.numberprogressbar.NumberProgressBar
         android:id="@+id/featureExtractProgressBar"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_below="@+id/alignCacheProgressBar"
-        android:layout_alignParentStart="true" />
+        android:layout_marginTop="20dp" />
 
 </RelativeLayout>

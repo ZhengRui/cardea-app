@@ -19,9 +19,15 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.widget.Button;
+
+import com.kyleduo.switchbutton.SwitchButton;
 import com.rzheng.fdlib.FaceDetector;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,7 +48,7 @@ public class SelfieActivity extends Activity {
     private byte[] callbackBuffer;
     private Camera.Size size;
     private int camInUse = 1;
-    private Button camSwitch;
+    private SwitchButton camSwitch;
     private FaceDetector fdetector;
     private int[] faceArr = new int[] {};
     private DrawOnTop mDraw;
@@ -53,7 +59,6 @@ public class SelfieActivity extends Activity {
     private boolean fcaffeReady = false;
     private jniFaceThread jniFaceTH;
     private int alignedFacesCacheNum;
-    private NumberProgressBar alignCacheProgressBar;
     private NumberProgressBar featureExtractProgressBar;
     private CaffeMobile caffeFace;
     private int batchSize;
@@ -78,7 +83,8 @@ public class SelfieActivity extends Activity {
         mPreviewHolder = mPreview.getHolder();
         mPreviewHolder.addCallback(surfaceCallback);
 
-        camSwitch = (Button) findViewById(R.id.selfieSwitchCamBtn);
+        camSwitch = (SwitchButton) findViewById(R.id.selfieSwitchCamBtn);
+        camSwitch.setChecked(camInUse == 1 ? true : false);
         camSwitch.setOnClickListener(new Button.OnClickListener() {
             public void onClick(View v) {
                 switchCam();
@@ -104,7 +110,6 @@ public class SelfieActivity extends Activity {
             }
         };
 
-        alignCacheProgressBar = (NumberProgressBar)findViewById(R.id.alignCacheProgressBar);
         featureExtractProgressBar = (NumberProgressBar)findViewById(R.id.featureExtractProgressBar);
 
         Log.i(TAG, "now in selfie mode");
@@ -134,7 +139,28 @@ public class SelfieActivity extends Activity {
             if (MainActivity.fdetector == null) {
                 File cascadeDir = getDir("cascade", Context.MODE_PRIVATE);
                 File cascadeFile = new File(cascadeDir, "haarcascade_frontalface_alt.xml");
+                if (!cascadeFile.exists()) {
+                    InputStream is = getResources().openRawResource(R.raw.haarcascade_frontalface_alt);
+                    try {
+                        FileOutputStream os = new FileOutputStream(cascadeFile);
+                        byte[] buffer = new byte[4096];
+                        int bytesRead;
+                        try {
+                            while ((bytesRead = is.read(buffer)) != -1) {
+                                os.write(buffer, 0, bytesRead);
+                            }
+                            is.close();
+                            os.close();
+
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    } catch (FileNotFoundException e) {
+                        e.printStackTrace();
+                    }
+                }
                 MainActivity.fdetector = new FaceDetector(cascadeFile.getAbsolutePath(), MainActivity.batchSize);
+                Log.i(TAG, landmarksFilePath);
                 MainActivity.fdetector.loadShapePredictor(landmarksFilePath);
             }
 
@@ -185,11 +211,7 @@ public class SelfieActivity extends Activity {
             if (mCameraConfigured) {
                 jniFaceTH.setFrm(data);
                 mDraw.invalidate();
-                alignCacheProgressBar.setProgress(alignedFacesCacheNum < batchSize ? alignedFacesCacheNum * (100 / batchSize) : 100);
                 featureExtractProgressBar.setProgress(totalFaceFeatures.size());
-
-                if (fcaffeReady && alignedFacesCacheNum >= batchSize )
-                    new featExtractTask().execute();
             }
         }
     };
@@ -235,34 +257,22 @@ public class SelfieActivity extends Activity {
             alignedFacesCacheNum += alignedFacesCacheNum < batchSize ? faceArr.length / 4 : 0;
             Log.i(TAG, "AF Cache Size: " + alignedFacesCacheNum);
         } else {
-            try {
-                Thread.sleep(10000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private class featExtractTask extends AsyncTask<Void, Void, Boolean> {
-
-        @Override
-        protected Boolean doInBackground(Void... params) {
-            extractAndSendFeatures();
-            return true;
-        }
-
-        protected void onPostExecute(Boolean ready) {
-            // take button enabled
+            if (fcaffeReady && alignedFacesCacheNum == 1)
+                extractFeatures();
             alignedFacesCacheNum = 0;
-            Log.i(TAG, "All models are loaded.");
+//            try {
+//                Thread.sleep(200);
+//            } catch (InterruptedException e) {
+//                e.printStackTrace();
+//            }
         }
     }
 
-    private void extractAndSendFeatures() {
+    private void extractFeatures() {
         batchFaceFeatures = caffeFace.extractFeaturesCVBatch(fdetector.getAlignedFacesAddr(),
                 "eltwise_fc1");
-//        Log.i(TAG, "Total: " + batchFaceFeatures.length +
-//                " features, each feature length: " + batchFaceFeatures[0].length);
+        Log.i(TAG, "Total: " + batchFaceFeatures.length +
+                " features, each feature length: " + batchFaceFeatures[0].length);
 //        for (float[] feat : batchFaceFeatures) {
 //            Log.i(TAG, Arrays.toString(feat));
 //        }
