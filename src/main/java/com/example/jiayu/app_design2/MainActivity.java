@@ -336,7 +336,7 @@ public class MainActivity extends Activity {
                 //byte[] buffer = new byte[10];
                 //int read = mInputStream.read(buffer);
                 long endTime = SystemClock.uptimeMillis();
-                Log.i(TAG, String.format("elapsed wall time: %d ms", endTime - startTime));
+                Log.i(TAG, String.format("time of sending the frame: %d ms", endTime - startTime));
 
 
             } catch (IOException e) {
