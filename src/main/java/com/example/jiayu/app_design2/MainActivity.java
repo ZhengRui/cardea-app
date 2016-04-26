@@ -72,7 +72,7 @@ public class MainActivity extends Activity {
     //private Uri fileUri;
 
     public static FaceDetector fdetector;
-    public static int batchSize = 1;
+    public static int batchSize = 10;
     public static CaffeMobile caffeFace;
     private static CaffeMobile caffeScene;
 
