@@ -67,7 +67,7 @@ public class SelfieActivity extends Activity {
     private SweetAlertDialog loadingDialog;
 
     private float[][] batchFaceFeatures;
-    private List<float[]> totalFaceFeatures = new ArrayList<float[]>();
+    public static List<float[]> totalFaceFeatures = new ArrayList<float[]>();
 
     private static final String DATA_PATH = Environment.getExternalStorageDirectory().toString() + "/ContextPrivacy/";
     private String landmarksFilePath = DATA_PATH + "shape_predictor_68_face_landmarks.dat";
@@ -277,7 +277,7 @@ public class SelfieActivity extends Activity {
 //            Log.i(TAG, Arrays.toString(feat));
 //        }
         for (int i=0; i < batchFaceFeatures.length; i++)
-            totalFaceFeatures.add(batchFaceFeatures[i]);
+            totalFaceFeatures.add(batchFaceFeatures[i]); Log.i(TAG, "Total # of face features: " + String.valueOf(totalFaceFeatures.size()));
     }
 
     private void initPreview(int width, int height) {

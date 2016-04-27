@@ -292,30 +292,40 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == REQUEST_UPLOAD_MY && resultCode == RESULT_OK) {
-            SharedPreferences pref =  PreferenceManager.getDefaultSharedPreferences(this);
-            SharedPreferences.Editor editor = pref.edit();
-            Set<String> values = new HashSet<String>();
-            values.add(data.getStringExtra(MediaActivity.EXTRA_FILE_URI));
-            values.add(String.valueOf(data.getIntExtra(MediaActivity.NUM_OF_FEATURE, 0)));
-            editor.putStringSet("my_feature", values);
-            editor.commit();
+        if (requestCode == REQUEST_UPLOAD_MY) {
+            Log.i(TAG, "onActivityRsult() of REQUEST_UPLOAD_MY is called...");
+            //SharedPreferences pref =  PreferenceManager.getDefaultSharedPreferences(this);
+            //SharedPreferences.Editor editor = pref.edit();
+            //Set<String> values = new HashSet<String>();
+            //values.add(data.getStringExtra(MediaActivity.EXTRA_FILE_URI));
+            //values.add(String.valueOf(data.getIntExtra(MediaActivity.NUM_OF_FEATURE, 0)));
+            //editor.putStringSet("my_feature", values);
+            //editor.commit();
 
             Preference preference1 = findPreference("my_feature");
-            String num = String.valueOf(data.getIntExtra(MediaActivity.NUM_OF_FEATURE, 0));
+            String num = "Number of features: " + String.valueOf(SelfieActivity.totalFaceFeatures.size());
+            Log.i(TAG, "totoalFaceFeatures.size() = " + num);
             preference1.setSummary(num);
 
-        } else if (requestCode == REQUEST_UPLOAD_HIS_CAPTURE && resultCode == RESULT_OK) {
-            SharedPreferences pref =  PreferenceManager.getDefaultSharedPreferences(this);
-            SharedPreferences.Editor editor = pref.edit();
-            editor.putString("others_photo_capture", data.getStringExtra(MediaActivity.EXTRA_FILE_URI));
-            editor.commit();
+        } else if (requestCode == REQUEST_UPLOAD_HIS_CAPTURE) {
+            //SharedPreferences pref =  PreferenceManager.getDefaultSharedPreferences(this);
+            //SharedPreferences.Editor editor = pref.edit();
+            //editor.putString("others_photo_capture", data.getStringExtra(MediaActivity.EXTRA_FILE_URI));
+            //editor.commit();
+
+            Preference preference2 = findPreference("others_photo_capture");
+            String num = "Number of features: " + String.valueOf(SelfieActivity.totalFaceFeatures.size());
+            preference2.setSummary(num);
 
         } else if (requestCode == REQUEST_UPLOAD_HIS_SELECT) {
             SharedPreferences pref =  PreferenceManager.getDefaultSharedPreferences(this);
             SharedPreferences.Editor editor = pref.edit();
             editor.putString("others_photo_select", data.getStringExtra(MediaActivity.EXTRA_FILE_URI));
             editor.commit();
+
+            Preference preference3 = findPreference("others_photo_select");
+            String num = String.valueOf(data.getIntExtra(MediaActivity.NUM_OF_FEATURE, 0));
+            preference3.setSummary(num);
 
         }
         super.onActivityResult(requestCode, resultCode, data);
