@@ -257,7 +257,7 @@ public class SelfieActivity extends Activity {
             alignedFacesCacheNum += alignedFacesCacheNum < batchSize ? faceArr.length / 4 : 0;
             Log.i(TAG, "AF Cache Size: " + alignedFacesCacheNum);
         } else {
-            if (fcaffeReady && alignedFacesCacheNum == 1)
+            if (fcaffeReady /* && alignedFacesCacheNum == 1 */)
                 extractFeatures();
             alignedFacesCacheNum = 0;
 //            try {
