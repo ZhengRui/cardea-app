@@ -69,9 +69,6 @@ import java.util.Queue;
 
 import cn.pedant.SweetAlert.SweetAlertDialog;
 
-/**
- * Created by Jiayu on 19/3/16.
- */
 public class MainActivity extends Activity {
     private static final String TAG = "MainActivity";
     private static final int REQUEST_TAKE_PHOTO = 100;
@@ -253,6 +250,7 @@ public class MainActivity extends Activity {
                     Log.i(TAG, "successfully get last location...");
                     latitude = mLastLocation.getLatitude();
                     longitude = mLastLocation.getLongitude();
+                    Log.i(TAG, "Latitude: " + String.valueOf(latitude) + ", longitude: " + String.valueOf(longitude));
                 }
             } catch (SecurityException e) {
                 e.printStackTrace();
@@ -307,7 +305,7 @@ public class MainActivity extends Activity {
         if (mOutputStream != null ) {   // oStream maybe set to null by previous failed asynctask
             Log.i(TAG, "mOutputStream is not null, and sendFrm() is running...");
             try {
-                // allocate 4 byte for packetContent
+                // header大小40 包括6个整数 2 个double，最后一个整数存的就是后面frame size
                 // be careful of big_endian(python side) and little endian(c++ server side)
                 int dataSize = frmdata.length;
                 byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, size.width, size.height, dataSize});
@@ -510,7 +508,7 @@ public class MainActivity extends Activity {
     private byte[] doubleToByte(double[] input) {
         byte[] output = new byte[input.length*8];
         for (int i=0; i < input.length; i++)
-            ByteBuffer.wrap(output, 8*i, 8).putDouble(input[i]);
+            ByteBuffer.wrap(output, 8*i, 8).order(ByteOrder.LITTLE_ENDIAN).putDouble(input[i]);
         return output;
     }
 

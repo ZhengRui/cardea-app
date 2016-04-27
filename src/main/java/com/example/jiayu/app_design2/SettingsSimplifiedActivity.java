@@ -4,9 +4,11 @@ package com.example.jiayu.app_design2;
 import android.annotation.TargetApi;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.SystemClock;
 import android.preference.ListPreference;
 import android.preference.MultiSelectListPreference;
 import android.preference.Preference;
@@ -20,11 +22,20 @@ import android.view.View;
 import android.widget.Button;
 
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 public class SettingsSimplifiedActivity extends PreferenceActivity {
+    private static final String TAG = "SettingActivity";
     private static final int REQUEST_UPLOAD_MY = 100;
     private static final int REQUEST_UPLOAD_HIS_CAPTURE = 200;
     private static final int REQUEST_UPLOAD_HIS_SELECT = 300;
@@ -33,6 +44,10 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
 
     private Button mOk;
     private String imgPath;
+
+    private Socket mSocket;
+    private OutputStream mOutputStream;
+    private InputStream mInputStream;
 
     /**
      * A preference value change listener that updates the preference's summary
@@ -114,7 +129,7 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         mOk.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v){
-
+                new socketCreationTask("10.89.28.149", 8888).execute();
             }
         });
 
@@ -167,11 +182,117 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
 
     }
 
+    private class socketCreationTask extends AsyncTask<Void, Void, Void> {
+        String desAddress;
+        int dstPort;
+
+        socketCreationTask(String addr, int port) {
+            this.desAddress = addr;
+            this.dstPort = port;
+        }
+
+        @Override
+        protected Void doInBackground(Void... argms) {
+            try {
+                mSocket = new Socket(desAddress, dstPort);
+                Log.i(TAG, "Socket established");
+                mOutputStream = mSocket.getOutputStream();
+                mInputStream = mSocket.getInputStream();
+
+                sendPrefence();
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+    }
+
+    private void sendPrefence() {
+        SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+
+        boolean yesGestureSwitch = sp.getBoolean("yes_gesture_switch", true);
+        boolean noGestureSwitch = sp.getBoolean("no_gesture_switch", true);
+        String locationText = sp.getString("location_text", null);
+
+        Set<String> scenario = sp.getStringSet("scenario_list", null);
+        MultiSelectListPreference scenarioListPreference = (MultiSelectListPreference) findPreference("scenario_list");
+        List<Integer> scenarios = new ArrayList<Integer>();
+        for (String tmp : scenario) {
+            int index = scenarioListPreference.findIndexOfValue(tmp);
+            scenarios.add(index);
+        }
+        int[] sceneArray = new int[scenarios.size()];
+        for (int i = 0; i < scenarios.size(); i++) {
+            sceneArray[i] = scenarios.get(i);
+        }
+
+        String policyList = sp.getString("policy_list", null);
+        ListPreference listPreference = (ListPreference) findPreference("policy_list");
+        int policyInt = listPreference.findIndexOfValue(policyList);
+
+
+        if (mOutputStream != null ) {   // oStream maybe set to null by previous failed asynctask
+            try {
+                // 4 bytes (size) of size for each data | size of each data | real data
+                // be careful of big_endian(python side) and little endian(c++ server side)
+                byte[] gesture = new byte[]{(byte)(yesGestureSwitch?1:0), (byte)(noGestureSwitch?1:0)};
+                byte[] location = locationText.getBytes();
+                byte[] scene = intToByte(sceneArray);
+                byte[] policy = intToByte(new int[] {policyInt});
+                byte[] dataSize = intToByte(new int[]{gesture.length, location.length, scene.length, policy.length});
+
+                // size for different parts of the sending packet
+                int sizeOfSize = dataSize.length;
+                int sizeOfData = gesture.length + location.length + scene.length + policy.length;
+
+                byte[] header = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(sizeOfSize).array();
+
+                // combine multiple byte array together
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                outputStream.write(gesture);
+                outputStream.write(location);
+                outputStream.write(scene);
+                outputStream.write(policy);
+                byte[] data = outputStream.toByteArray();
+
+                // prepare for final sending packet
+                byte[] packetContent = new byte[4 + sizeOfSize + sizeOfData];
+
+                System.arraycopy(header, 0, packetContent, 0, 4);
+                System.arraycopy(dataSize, 0, packetContent, 4, dataSize.length);
+                System.arraycopy(data, 0, packetContent, 4+dataSize.length, data.length);
+
+                Log.i(TAG, "start sending...");
+                mOutputStream.write(packetContent);
+                Log.i(TAG, "finish sending...");
+
+                //byte[] buffer = new byte[10];
+                //int read = mInputStream.read(buffer);
+            } catch (IOException e) {
+                e.printStackTrace();
+                if (mSocket != null) {
+                    Log.i(TAG, "Connection lost.");
+                    try {
+                        mOutputStream.close();
+                        mSocket.close();
+                        mOutputStream = null;
+                        mSocket = null;
+                    } catch (IOException e1) {
+                        e1.printStackTrace();
+                    }
+                }
+            }
+        } else {
+            //Log.i(TAG, "Asynctask - " + tskId + " skipped.");
+        }
+
+    }
+
+
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_UPLOAD_MY && resultCode == RESULT_OK) {
-            //imgPath = data.getStringExtra(MediaActivity.EXTRA_FILE_URI);
-            //Log.i("SettingsActivity", data.getStringExtra(MediaActivity.EXTRA_FILE_URI));
             SharedPreferences pref =  PreferenceManager.getDefaultSharedPreferences(this);
             SharedPreferences.Editor editor = pref.edit();
             Set<String> values = new HashSet<String>();
@@ -201,14 +322,24 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
     }
 
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-        if (id == android.R.id.home) {
-            startActivity(new Intent(SettingsSimplifiedActivity.this, SettingsActivity.class));
-            return true;
+    private byte[] intToByte(int[] input) {
+        byte[] output = new byte[input.length*4];
+
+        for(int i = 0; i < input.length; i++) {
+            output[i*4] = (byte)(input[i] & 0xFF);
+            output[i*4 + 1] = (byte)((input[i] & 0xFF00) >>> 8);
+            output[i*4 + 2] = (byte)((input[i] & 0xFF0000) >>> 16);
+            output[i*4 + 3] = (byte)((input[i] & 0xFF000000) >>> 24);
         }
-        return super.onOptionsItemSelected(item);
+
+        return output;
+    }
+
+    private byte[] doubleToByte(double[] input) {
+        byte[] output = new byte[input.length*8];
+        for (int i=0; i < input.length; i++)
+            ByteBuffer.wrap(output, 8 * i, 8).order(ByteOrder.LITTLE_ENDIAN).putDouble(input[i]);
+        return output;
     }
 
 }
