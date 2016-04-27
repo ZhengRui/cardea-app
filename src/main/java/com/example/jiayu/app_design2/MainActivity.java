@@ -345,10 +345,10 @@ public class MainActivity extends Activity {
                 System.arraycopy(headerMisc, 0, packetContent, 0, headerMisc.length);
                 System.arraycopy(headerGeo, 0, packetContent, headerMisc.length, headerGeo.length);
                 System.arraycopy(frmdata, 0, packetContent, headerSize, dataSize);
-//                Log.i(TAG, "lat, lon : " + latitude + ", " + longitude);
+                Log.i(TAG, "lat, lon : " + latitude + ", " + longitude);
 
-//                Log.i(TAG, "header length: " + headerSize + " data length: " + dataSize +
-//                        " msg length: " + packetContent.length);
+                Log.i(TAG, "header length: " + headerSize + " data length: " + dataSize +
+                        " msg length: " + packetContent.length);
 
                 long startTime = SystemClock.uptimeMillis();
 
