@@ -62,6 +62,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.Queue;
@@ -98,12 +99,12 @@ public class MainActivity extends Activity {
     public static CaffeMobile caffeFace;
     private static CaffeMobile caffeScene;
 
-    private Queue<Integer> tskQueue = new LinkedList<Integer>();;
     private Socket mSocket;
     private OutputStream mOutputStream;
     private InputStream mInputStream;
 
     private int orientCase;
+    private int msgtype = 0;
 
     private static final String DATA_PATH = Environment.getExternalStorageDirectory().toString() + "/ContextPrivacy/";
     private String landmarksFilePath = DATA_PATH + "shape_predictor_68_face_landmarks.dat";
@@ -119,6 +120,7 @@ public class MainActivity extends Activity {
     private GoogleApiClient mGoogleApiClient;
     private LocationRequest mLocationRequest;
     protected Location mLastLocation;
+    private double latitude, longitude;
     private float mDistance;
     public static final long UPDATE_INTERVAL_IN_MILLISECONDS = 10000;
     public static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS =
@@ -226,6 +228,9 @@ public class MainActivity extends Activity {
          */
 
         buildGoogleApiClient();
+
+        mAddress = getPrefAddress();
+        new locationTask().execute(mAddress);
     }
 
 
@@ -274,10 +279,8 @@ public class MainActivity extends Activity {
         public void onPictureTaken(byte[] data, Camera camera) {
             Log.i(TAG, Integer.toString(data.length));
 
-            new socketCreationTask("10.89.159.44", 12345).execute(data); //10.89.28.149
+            new socketCreationTask("10.89.28.149", 9999).execute(data); //10.89.28.149
 
-            mAddress = getPrefAddress();
-            new locationTask().execute(mAddress);
         }
     };
 
@@ -297,7 +300,6 @@ public class MainActivity extends Activity {
                 Log.i(TAG, "Socket established");
                 mOutputStream = mSocket.getOutputStream();
                 mInputStream = mSocket.getInputStream();
-                for (int i = 1; i <= 1; i++) tskQueue.add(i);
 
                 sendFrm(data[0]);
 
@@ -308,6 +310,26 @@ public class MainActivity extends Activity {
         }
     }
 
+    private byte[] intToByte(int[] input) {
+        byte[] output = new byte[input.length*4];
+
+        for(int i = 0; i < input.length; i++) {
+            output[i*4] = (byte)(input[i] & 0xFF);
+            output[i*4 + 1] = (byte)((input[i] & 0xFF00) >>> 8);
+            output[i*4 + 2] = (byte)((input[i] & 0xFF0000) >>> 16);
+            output[i*4 + 3] = (byte)((input[i] & 0xFF000000) >>> 24);
+        }
+
+        return output;
+    }
+
+    private byte[] doubleToByte(double[] input) {
+        byte[] output = new byte[input.length*8];
+        for (int i=0; i < input.length; i++)
+            ByteBuffer.wrap(output, 8*i, 8).putDouble(input[i]);
+        return output;
+    }
+
     private void sendFrm(byte[] frmdata) {
         if (mOutputStream != null ) {   // oStream maybe set to null by previous failed asynctask
             Log.i(TAG, "mOutputStream is not null, and sendFrm() is running...");
@@ -315,10 +337,18 @@ public class MainActivity extends Activity {
                 // allocate 4 byte for packetContent
                 // be careful of big_endian(python side) and little endian(c++ server side)
                 int dataSize = frmdata.length;
-                byte[] frmSize = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(dataSize).array();
-                byte[] packetContent = new byte[4 + dataSize];
-                System.arraycopy(frmSize, 0, packetContent, 0, 4);
-                System.arraycopy(frmdata, 0, packetContent, 4, dataSize);
+                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, size.width, size.height, dataSize});
+                byte[] headerGeo = doubleToByte(new double[] {latitude, longitude});
+                int headerSize = headerMisc.length + headerGeo.length;
+                byte[] packetContent = new byte[headerSize + dataSize];
+
+                System.arraycopy(headerMisc, 0, packetContent, 0, headerMisc.length);
+                System.arraycopy(headerGeo, 0, packetContent, headerMisc.length, headerGeo.length);
+                System.arraycopy(frmdata, 0, packetContent, headerSize, dataSize);
+//                Log.i(TAG, "lat, lon : " + latitude + ", " + longitude);
+
+//                Log.i(TAG, "header length: " + headerSize + " data length: " + dataSize +
+//                        " msg length: " + packetContent.length);
 
                 long startTime = SystemClock.uptimeMillis();
 
@@ -330,7 +360,6 @@ public class MainActivity extends Activity {
                 //int read = mInputStream.read(buffer);
                 long endTime = SystemClock.uptimeMillis();
                 Log.i(TAG, String.format("time of sending the frame: %d ms", endTime - startTime));
-
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -395,8 +424,8 @@ public class MainActivity extends Activity {
                 location = jsonObject.getJSONArray("results").getJSONObject(0)
                         .getJSONObject("geometry").getJSONObject("location");
 
-                double latitude = location.getDouble("lat");
-                double longitude = location.getDouble("lng");
+                latitude = location.getDouble("lat");
+                longitude = location.getDouble("lng");
 
                 Location loc = new Location("");
                 loc.setLatitude(latitude);
@@ -422,7 +451,7 @@ public class MainActivity extends Activity {
     }
 
 
-    /** bind th camera with surface view. Initialize preview and start preview. */
+    /** bind th camera with surface view. Initialize preview and start preview. **/
     private SurfaceHolder.Callback surfaceCallback = new SurfaceHolder.Callback() {
         @Override
         public void surfaceCreated(SurfaceHolder holder) {
@@ -483,7 +512,7 @@ public class MainActivity extends Activity {
     }
 
 
-    /** Load files and prepare for caffe tasks */
+    /** Load files and prepare for caffe tasks **/
     private class initializeTask extends AsyncTask<Void, Void, Boolean> {
 
         @Override
