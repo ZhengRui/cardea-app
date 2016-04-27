@@ -116,15 +116,9 @@ public class MainActivity extends Activity {
     private OrientationEventListener mOrientationListener;
     private SweetAlertDialog loadingDialog;
 
-    private String mAddress;
     private GoogleApiClient mGoogleApiClient;
-    private LocationRequest mLocationRequest;
     protected Location mLastLocation;
     private double latitude, longitude;
-    private float mDistance;
-    public static final long UPDATE_INTERVAL_IN_MILLISECONDS = 10000;
-    public static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS =
-            UPDATE_INTERVAL_IN_MILLISECONDS / 2;
 
     static {
         System.loadLibrary("facedet");
@@ -228,9 +222,6 @@ public class MainActivity extends Activity {
          */
 
         buildGoogleApiClient();
-
-        mAddress = getPrefAddress();
-        new locationTask().execute(mAddress);
     }
 
 
@@ -260,6 +251,8 @@ public class MainActivity extends Activity {
                 mLastLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
                 if (mLastLocation != null) {
                     Log.i(TAG, "successfully get last location...");
+                    latitude = mLastLocation.getLatitude();
+                    longitude = mLastLocation.getLongitude();
                 }
             } catch (SecurityException e) {
                 e.printStackTrace();
@@ -308,26 +301,6 @@ public class MainActivity extends Activity {
             }
             return null;
         }
-    }
-
-    private byte[] intToByte(int[] input) {
-        byte[] output = new byte[input.length*4];
-
-        for(int i = 0; i < input.length; i++) {
-            output[i*4] = (byte)(input[i] & 0xFF);
-            output[i*4 + 1] = (byte)((input[i] & 0xFF00) >>> 8);
-            output[i*4 + 2] = (byte)((input[i] & 0xFF0000) >>> 16);
-            output[i*4 + 3] = (byte)((input[i] & 0xFF000000) >>> 24);
-        }
-
-        return output;
-    }
-
-    private byte[] doubleToByte(double[] input) {
-        byte[] output = new byte[input.length*8];
-        for (int i=0; i < input.length; i++)
-            ByteBuffer.wrap(output, 8*i, 8).putDouble(input[i]);
-        return output;
     }
 
     private void sendFrm(byte[] frmdata) {
@@ -380,74 +353,6 @@ public class MainActivity extends Activity {
             //Log.i(TAG, "Asynctask - " + tskId + " skipped.");
         }
 
-    }
-
-    private class locationTask extends AsyncTask<String, Void, Location> {
-
-        @Override
-        protected Location doInBackground(String... address) {
-            HttpURLConnection conn = null;
-            String data = "address=" + URLEncoder.encode(address[0]) + "&sensor=false";
-            String url  = "http://maps.google.com/maps/api/geocode/json?" + data;
-            String result = null;
-
-            try {
-                URL mURL = new URL(url);
-                conn = (HttpURLConnection) mURL.openConnection();
-
-                conn.setRequestMethod("GET");
-                conn.setReadTimeout(5000);
-                conn.setConnectTimeout(10000);
-
-                int responseCode = conn.getResponseCode();
-                if (responseCode == 200) {
-                    InputStream is = conn.getInputStream();
-                    result = getStringFromInputStream(is);
-
-                    //return result;
-                } else {
-                    Log.i(TAG, "http URL connection failed..." );
-                }
-            } catch (MalformedURLException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                if (conn != null) {
-                    conn.disconnect();
-                }
-            }
-
-            try {
-                JSONObject jsonObject = new JSONObject(result.toString());
-                JSONObject location = null;
-                location = jsonObject.getJSONArray("results").getJSONObject(0)
-                        .getJSONObject("geometry").getJSONObject("location");
-
-                latitude = location.getDouble("lat");
-                longitude = location.getDouble("lng");
-
-                Location loc = new Location("");
-                loc.setLatitude(latitude);
-                loc.setLongitude(longitude);
-                Log.d(TAG, "latitude is " + latitude + ", longitude is " + longitude);
-
-                return loc;
-
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(Location loc) {
-            if (mLastLocation != null) {
-                mDistance = loc.distanceTo(mLastLocation);
-                Log.i(TAG, "Distance between HKUST and currentLocation is: " + String.valueOf(mDistance));
-            }
-        }
     }
 
 
@@ -568,13 +473,6 @@ public class MainActivity extends Activity {
     }
 
 
-    /** Get address from preference */
-    private String getPrefAddress() {
-        String address = "HKUST";
-
-        return address;
-    }
-
     private void switchCam() {
         if (mCamera != null && mInPreview) {
             mCamera.stopPreview();
@@ -587,7 +485,6 @@ public class MainActivity extends Activity {
         front1back0 = 1 - front1back0;
         mCamera = Camera.open(front1back0);   // 0 for back, 1 for frontal
         mCamera.setDisplayOrientation(90);
-//        setCameraDisplayOrientation(MainActivity.this, front1back0, mCamera);
         initPreview(size.width, size.height);
         startPreview();
 
@@ -597,54 +494,24 @@ public class MainActivity extends Activity {
 
     }
 
-    /** Create a file Uri for saving an image or video */
-    private static Uri getOutputMediaFileUri(int type) {
-        return Uri.fromFile(getOutputMediaFile(type));
+    private byte[] intToByte(int[] input) {
+        byte[] output = new byte[input.length*4];
+
+        for(int i = 0; i < input.length; i++) {
+            output[i*4] = (byte)(input[i] & 0xFF);
+            output[i*4 + 1] = (byte)((input[i] & 0xFF00) >>> 8);
+            output[i*4 + 2] = (byte)((input[i] & 0xFF0000) >>> 16);
+            output[i*4 + 3] = (byte)((input[i] & 0xFF000000) >>> 24);
+        }
+
+        return output;
     }
 
-    /** Create a File for saving an image or video */
-    private static File getOutputMediaFile(int type) {
-
-        File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_PICTURES), "app-design2");
-
-        // Create the storage directory if it does not exist
-        if (!mediaStorageDir.exists()) {
-            if (!mediaStorageDir.mkdirs()) {
-                Log.d(TAG, "failed to create directory");
-                return null;
-            }
-        }
-
-        // Create a media file name
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        File mediaFile;
-        if (type == MEDIA_TYPE_IMAGE) {
-            mediaFile = new File(mediaStorageDir.getPath() + File.separator +
-                    "IMG_" + timeStamp + ".jpg");
-        } else {
-            return null;
-        }
-
-        return mediaFile;
-    }
-
-    /** return string from inputstream @throws IOException */
-    private String getStringFromInputStream(InputStream is) throws IOException{
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-
-        byte[] buffer = new byte[1024];
-        int len = -1;
-
-        while ((len = is.read(buffer)) != -1) {
-            os.write(buffer, 0, len);
-        }
-        is.close();
-        String result = os.toString();
-        os.close();
-
-        return result;
-
+    private byte[] doubleToByte(double[] input) {
+        byte[] output = new byte[input.length*8];
+        for (int i=0; i < input.length; i++)
+            ByteBuffer.wrap(output, 8*i, 8).putDouble(input[i]);
+        return output;
     }
 
     @Override
