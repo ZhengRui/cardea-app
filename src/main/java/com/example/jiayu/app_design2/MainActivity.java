@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.PixelFormat;
 import android.graphics.SweepGradient;
 import android.graphics.drawable.Drawable;
 import android.hardware.Camera;
@@ -86,6 +87,7 @@ public class MainActivity extends Activity {
     private boolean mInPreview = false;
     private boolean mCameraConfigured = false;
     private Camera.Size size;
+    private Camera.Size imgSize;
     private static int front1back0 = 0;
 
     private FloatingActionButton mFabBtnTake;
@@ -310,7 +312,7 @@ public class MainActivity extends Activity {
                 // allocate 4 byte for packetContent
                 // be careful of big_endian(python side) and little endian(c++ server side)
                 int dataSize = frmdata.length;
-                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, size.width, size.height, dataSize});
+                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, imgSize.width, imgSize.height, dataSize});
                 byte[] headerGeo = doubleToByte(new double[] {latitude, longitude});
                 int headerSize = headerMisc.length + headerGeo.length;
                 byte[] packetContent = new byte[headerSize + dataSize];
@@ -390,7 +392,18 @@ public class MainActivity extends Activity {
                 params.setPreviewSize(size.width, size.height);
                 Log.i(TAG, "Preview size: " + size.width + ", " + size.height);
                 params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+
+                imgSize = params.getPictureSize();
+                for (Camera.Size s : params.getSupportedPictureSizes()) {
+//                    Log.i(TAG, "Supported image size: " + s.width + ", " + s.height);
+                    if (s.width > imgSize.width && s.width < 2000)
+                        imgSize = s;
+                }
+                params.setPictureFormat(PixelFormat.JPEG);
                 params.setJpegQuality(100);
+                params.setPictureSize(imgSize.width, imgSize.height);
+                Log.i(TAG, "Image Size: " + imgSize.width + ", " + imgSize.height);
+
                 mCamera.setParameters(params);
                 mCameraConfigured = true;
 
@@ -510,7 +523,7 @@ public class MainActivity extends Activity {
     private byte[] doubleToByte(double[] input) {
         byte[] output = new byte[input.length*8];
         for (int i=0; i < input.length; i++)
-            ByteBuffer.wrap(output, 8*i, 8).putDouble(input[i]);
+            ByteBuffer.wrap(output, 8*i, 8).order(ByteOrder.LITTLE_ENDIAN).putDouble(input[i]);
         return output;
     }
 
