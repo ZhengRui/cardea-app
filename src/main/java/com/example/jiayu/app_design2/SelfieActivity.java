@@ -278,7 +278,8 @@ public class SelfieActivity extends Activity {
 //        }
         for (int i=0; i < batchFaceFeatures.length; i++)
             totalFaceFeatures.add(batchFaceFeatures[i]);
-            Log.i(TAG, "Total # of face features: " + String.valueOf(totalFaceFeatures.size()));
+
+        Log.i(TAG, "Total # of face features: " + String.valueOf(totalFaceFeatures.size()));
     }
 
     private void initPreview(int width, int height) {

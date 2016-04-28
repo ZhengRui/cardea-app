@@ -2,6 +2,7 @@ package com.example.jiayu.app_design2;
 
 
 import android.annotation.TargetApi;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.AsyncTask;
@@ -20,9 +21,13 @@ import android.util.Log;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Toast;
 
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -41,6 +46,7 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
     private static final int REQUEST_UPLOAD_HIS_SELECT = 300;
     private static final int MEDIA_TYPE_IMAGE = 1;
     private static final int MEDIA_TYPE_VIDEO = 2;
+    public static final String featureFileName = "features.txt";
 
     private Button mOk;
     private String imgPath;
@@ -130,6 +136,7 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
             @Override
             public void onClick(View v){
                 new socketCreationTask("10.89.28.149", 9999).execute();
+
             }
         });
 
@@ -216,11 +223,17 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         String locationText = sp.getString("location_text", null);
 
         Set<String> scenario = sp.getStringSet("scenario_list", null);
-        MultiSelectListPreference scenarioListPreference = (MultiSelectListPreference) findPreference("scenario_list");
         List<Integer> scenarios = new ArrayList<Integer>();
-        for (String tmp : scenario) {
-            int index = scenarioListPreference.findIndexOfValue(tmp);
-            scenarios.add(index);
+        if (scenario == null) {//value = none, return -1
+            scenarios.add(-1);
+        } else if (scenario.size() == 11) { //all are selected, return 0
+            scenarios.add(0);
+        } else {
+            MultiSelectListPreference scenarioListPreference = (MultiSelectListPreference) findPreference("scenario_list");
+            for (String tmp : scenario) {
+                int index = scenarioListPreference.findIndexOfValue(tmp);
+                scenarios.add(index);
+            }
         }
         int[] sceneArray = new int[scenarios.size()];
         for (int i = 0; i < scenarios.size(); i++) {
@@ -244,7 +257,7 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
 
         if (mOutputStream != null ) {   // oStream maybe set to null by previous failed asynctask
             try {
-                // 4 bytes (size) of size for each data | size of each data | real data
+                // (24 bytes) size of each data | real data
                 // be careful of big_endian(python side) and little endian(c++ server side)
                 byte[] gesture = new byte[]{(byte)(yesGestureSwitch?1:0), (byte)(noGestureSwitch?1:0)};
                 byte[] location = locationText.getBytes();
@@ -275,6 +288,9 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
                 Log.i(TAG, "start sending...");
                 mOutputStream.write(packetContent);
                 Log.i(TAG, "finish sending...");
+
+                // save sent features to SD card
+                saveFeatureToSD(featureFileName, feature);
 
                 //byte[] buffer = new byte[10];
                 //int read = mInputStream.read(buffer);
@@ -312,7 +328,13 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
             //editor.commit();
 
             Preference preference1 = findPreference("my_feature");
-            String num = "Number of features: " + String.valueOf(SelfieActivity.totalFaceFeatures.size());
+            String num = null;
+            try {
+                num = "Number of features saved: " + String.valueOf(getSizeFromSD(featureFileName))
+                                + "; Number of features added: " + String.valueOf(SelfieActivity.totalFaceFeatures.size());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             Log.i(TAG, "totoalFaceFeatures.size() = " + num);
             preference1.setSummary(num);
 
@@ -366,6 +388,29 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         for (int i=0; i < input.length; i++)
             ByteBuffer.wrap(output, 4 * i, 4).order(ByteOrder.LITTLE_ENDIAN).putDouble(input[i]);
         return output;
+    }
+
+    private void saveFeatureToSD(String fileName, byte[] features) throws IOException {
+        File contextPrivacyDir = new File(Environment.getExternalStorageDirectory(), "ContextPrivacy");
+        File featureFile = new File(contextPrivacyDir.getPath() + File.separator + fileName);
+
+        FileOutputStream fileOutputStream = new FileOutputStream(featureFile, true);
+        fileOutputStream.write(features);
+
+        if(fileOutputStream != null) {            //关闭FileOutputStream对象
+            fileOutputStream.close();
+            Toast.makeText(SettingsSimplifiedActivity.this, "Features saved", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private int getSizeFromSD(String fileName) throws IOException {
+        File contextPrivacyDir = new File(Environment.getExternalStorageDirectory(), "ContextPrivacy");
+        File featureFile = new File(contextPrivacyDir.getPath() + File.separator + fileName);
+
+        long length = featureFile.length();
+        int size = ((int)length)/256/4;
+
+        return size;
     }
 
 }

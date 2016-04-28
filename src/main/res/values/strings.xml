@@ -34,7 +34,7 @@
     <string name="pref_title_select_scenario">Scenarios for control</string>
 
     <string-array name="pref_scenario_list_titles">
-        <item>All</item>
+
         <item>Disease</item>
         <item>Eating</item>
         <item>Entertainment</item>
@@ -46,11 +46,10 @@
         <item>Shopping</item>
         <item>Work</item>
         <item>Others</item>
-        <item>None</item>
     </string-array>
 
     <string-array name="pref_scenario_list_values">
-        <item>0</item>
+
         <item>1</item>
         <item>2</item>
         <item>3</item>
@@ -62,7 +61,6 @@
         <item>9</item>
         <item>10</item>
         <item>11</item>
-        <item>-1</item>
     </string-array>
 
     <string-array name="pref_scenario_list_default"></string-array>

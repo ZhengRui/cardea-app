@@ -45,7 +45,7 @@
             android:title="@string/pref_title_select_scenario"/>
 
         <ListPreference
-            android:defaultValue="-1"
+            android:defaultValue="0"
             android:entries="@array/pref_policy_list_titles"
             android:entryValues="@array/pref_policy_list_values"
             android:key="policy_list"
