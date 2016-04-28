@@ -49,7 +49,7 @@ public class MediaActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.media_layout);
 
-        //setFileUri(null);
+        setFileUri(null);
 
         mivCaptured = (ImageView) findViewById(R.id.iv_captured);
 
