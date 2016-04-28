@@ -251,14 +251,11 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
                 byte[] scene = intToByte(sceneArray);
                 byte[] policy = intToByte(new int[] {policyInt});
                 byte[] feature = tmpFeature.toByteArray();
-                byte[] dataSize = intToByte(new int[]{gesture.length, location.length, scene.length,
+                byte[] header = intToByte(new int[]{1, gesture.length, location.length, scene.length,
                                             policy.length, feature.length});
 
                 // size for different parts of the sending packet
-                int sizeOfSize = dataSize.length;
                 int sizeOfData = gesture.length + location.length + scene.length + policy.length + feature.length;
-
-                byte[] header = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(sizeOfSize).array();
 
                 // combine multiple byte array together
                 ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -270,11 +267,10 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
                 byte[] data = outputStream.toByteArray();
 
                 // prepare for final sending packet
-                byte[] packetContent = new byte[4 + sizeOfSize + sizeOfData];
+                byte[] packetContent = new byte[header.length + sizeOfData];
 
-                System.arraycopy(header, 0, packetContent, 0, 4);
-                System.arraycopy(dataSize, 0, packetContent, 4, dataSize.length);
-                System.arraycopy(data, 0, packetContent, 4+dataSize.length, data.length);
+                System.arraycopy(header, 0, packetContent, 0, header.length);
+                System.arraycopy(data, 0, packetContent, header.length, data.length);
 
                 Log.i(TAG, "start sending...");
                 mOutputStream.write(packetContent);
