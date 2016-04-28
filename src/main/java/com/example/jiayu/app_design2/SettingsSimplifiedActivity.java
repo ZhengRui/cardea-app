@@ -129,7 +129,7 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         mOk.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v){
-                new socketCreationTask("10.89.28.149", 8888).execute();
+                new socketCreationTask("10.89.28.149", 9999).execute();
             }
         });
 
