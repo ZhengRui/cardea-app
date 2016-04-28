@@ -231,6 +231,16 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         ListPreference listPreference = (ListPreference) findPreference("policy_list");
         int policyInt = listPreference.findIndexOfValue(policyList);
 
+        List<float[]> featureList = SelfieActivity.totalFaceFeatures;
+        ByteArrayOutputStream tmpFeature = new ByteArrayOutputStream();
+        for (float[] array : featureList) {
+            try {
+                tmpFeature.write(floatToByte(array));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
 
         if (mOutputStream != null ) {   // oStream maybe set to null by previous failed asynctask
             try {
@@ -240,11 +250,13 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
                 byte[] location = locationText.getBytes();
                 byte[] scene = intToByte(sceneArray);
                 byte[] policy = intToByte(new int[] {policyInt});
-                byte[] dataSize = intToByte(new int[]{gesture.length, location.length, scene.length, policy.length});
+                byte[] feature = tmpFeature.toByteArray();
+                byte[] dataSize = intToByte(new int[]{gesture.length, location.length, scene.length,
+                                            policy.length, feature.length});
 
                 // size for different parts of the sending packet
                 int sizeOfSize = dataSize.length;
-                int sizeOfData = gesture.length + location.length + scene.length + policy.length;
+                int sizeOfData = gesture.length + location.length + scene.length + policy.length + feature.length;
 
                 byte[] header = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(sizeOfSize).array();
 
@@ -254,6 +266,7 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
                 outputStream.write(location);
                 outputStream.write(scene);
                 outputStream.write(policy);
+                outputStream.write(feature);
                 byte[] data = outputStream.toByteArray();
 
                 // prepare for final sending packet
@@ -349,6 +362,13 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         byte[] output = new byte[input.length*8];
         for (int i=0; i < input.length; i++)
             ByteBuffer.wrap(output, 8 * i, 8).order(ByteOrder.LITTLE_ENDIAN).putDouble(input[i]);
+        return output;
+    }
+
+    private byte[] floatToByte(float[] input) {
+        byte[] output = new byte[input.length*4];
+        for (int i=0; i < input.length; i++)
+            ByteBuffer.wrap(output, 4 * i, 4).order(ByteOrder.LITTLE_ENDIAN).putDouble(input[i]);
         return output;
     }
 
