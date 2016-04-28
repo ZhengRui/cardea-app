@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.PixelFormat;
 import android.graphics.SweepGradient;
 import android.graphics.drawable.Drawable;
 import android.hardware.Camera;
@@ -83,6 +84,7 @@ public class MainActivity extends Activity {
     private boolean mInPreview = false;
     private boolean mCameraConfigured = false;
     private Camera.Size size;
+    private Camera.Size imgSize;
     private static int front1back0 = 0;
 
     private FloatingActionButton mFabBtnTake;
@@ -308,7 +310,7 @@ public class MainActivity extends Activity {
                 // header大小40 包括6个整数 2 个double，最后一个整数存的就是后面frame size
                 // be careful of big_endian(python side) and little endian(c++ server side)
                 int dataSize = frmdata.length;
-                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, size.width, size.height, dataSize});
+                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, imgSize.width, imgSize.height, dataSize});
                 byte[] headerGeo = doubleToByte(new double[] {latitude, longitude});
                 int headerSize = headerMisc.length + headerGeo.length;
                 byte[] packetContent = new byte[headerSize + dataSize];
@@ -316,10 +318,10 @@ public class MainActivity extends Activity {
                 System.arraycopy(headerMisc, 0, packetContent, 0, headerMisc.length);
                 System.arraycopy(headerGeo, 0, packetContent, headerMisc.length, headerGeo.length);
                 System.arraycopy(frmdata, 0, packetContent, headerSize, dataSize);
-//                Log.i(TAG, "lat, lon : " + latitude + ", " + longitude);
+                Log.i(TAG, "lat, lon : " + latitude + ", " + longitude);
 
-//                Log.i(TAG, "header length: " + headerSize + " data length: " + dataSize +
-//                        " msg length: " + packetContent.length);
+                Log.i(TAG, "header length: " + headerSize + " data length: " + dataSize +
+                        " msg length: " + packetContent.length);
 
                 long startTime = SystemClock.uptimeMillis();
 
@@ -388,7 +390,18 @@ public class MainActivity extends Activity {
                 params.setPreviewSize(size.width, size.height);
                 Log.i(TAG, "Preview size: " + size.width + ", " + size.height);
                 params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+
+                imgSize = params.getPictureSize();
+                for (Camera.Size s : params.getSupportedPictureSizes()) {
+//                    Log.i(TAG, "Supported image size: " + s.width + ", " + s.height);
+                    if (s.width > imgSize.width && s.width < 2000)
+                        imgSize = s;
+                }
+                params.setPictureFormat(PixelFormat.JPEG);
                 params.setJpegQuality(100);
+                params.setPictureSize(imgSize.width, imgSize.height);
+                Log.i(TAG, "Image Size: " + imgSize.width + ", " + imgSize.height);
+
                 mCamera.setParameters(params);
                 mCameraConfigured = true;
 
