@@ -299,7 +299,7 @@ public class MainActivity extends Activity {
                 // header大小40 包括6个整数 2 个double，最后一个整数存的就是后面frame size
                 // be careful of big_endian(python side) and little endian(c++ server side)
                 int dataSize = frmdata.length;
-                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, imgSize.width, imgSize.height, dataSize});
+                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, imgSize.width, imgSize.height, dataSize, 0, 0});
                 byte[] headerGeo = doubleToByte(new double[] {latitude, longitude});
                 int headerSize = headerMisc.length + headerGeo.length;
                 byte[] packetContent = new byte[headerSize + dataSize];
