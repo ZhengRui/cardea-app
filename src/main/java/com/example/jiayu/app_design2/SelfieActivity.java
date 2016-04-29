@@ -67,7 +67,10 @@ public class SelfieActivity extends Activity {
     private SweetAlertDialog loadingDialog;
 
     private float[][] batchFaceFeatures;
-    public static List<float[]> totalFaceFeatures = new ArrayList<float[]>();
+    public static List<float[]> myTotalFaceFeatures = new ArrayList<>();
+    public static List<float[]> hisTotalFaceFeatures = new ArrayList<>();
+    public static final String EXTRA_WHOSE_FEATURE = "com.example.jiayu.app_design2";
+    private boolean isMyFeature;
 
     private static final String DATA_PATH = Environment.getExternalStorageDirectory().toString() + "/ContextPrivacy/";
     private String landmarksFilePath = DATA_PATH + "shape_predictor_68_face_landmarks.dat";
@@ -78,6 +81,10 @@ public class SelfieActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_selfie);
+
+        isMyFeature = getIntent().getStringExtra(EXTRA_WHOSE_FEATURE).equals(SettingActivity.myFeatureFileName) ? true:false;
+        Log.i(TAG, "getIntent() returns " + getIntent().getStringExtra(EXTRA_WHOSE_FEATURE) + "; myFeatureFileName is " + SettingActivity.myFeatureFileName);
+
 
         mPreview = (SurfaceView) findViewById(R.id.selfiePreview);
         mPreviewHolder = mPreview.getHolder();
@@ -211,7 +218,11 @@ public class SelfieActivity extends Activity {
             if (mCameraConfigured) {
                 jniFaceTH.setFrm(data);
                 mDraw.invalidate();
-                featureExtractProgressBar.setProgress(totalFaceFeatures.size());
+                if (isMyFeature) {
+                    featureExtractProgressBar.setProgress(myTotalFaceFeatures.size());
+                } else {
+                    featureExtractProgressBar.setProgress(hisTotalFaceFeatures.size());
+                }
             }
         }
     };
@@ -276,10 +287,18 @@ public class SelfieActivity extends Activity {
 //        for (float[] feat : batchFaceFeatures) {
 //            Log.i(TAG, Arrays.toString(feat));
 //        }
-        for (int i=0; i < batchFaceFeatures.length; i++)
-            totalFaceFeatures.add(batchFaceFeatures[i]);
 
-        Log.i(TAG, "Total # of face features: " + String.valueOf(totalFaceFeatures.size()));
+        if (isMyFeature) {
+            for (int i=0; i < batchFaceFeatures.length; i++)
+                myTotalFaceFeatures.add(batchFaceFeatures[i]);
+            Log.i(TAG, "Total # of face my features: " + String.valueOf(myTotalFaceFeatures.size()));
+        } else {
+            for (int i=0; i < batchFaceFeatures.length; i++)
+                hisTotalFaceFeatures.add(batchFaceFeatures[i]);
+            Log.i(TAG, "Total # of face features: " + String.valueOf(hisTotalFaceFeatures.size()));
+        }
+
+
     }
 
     private void initPreview(int width, int height) {

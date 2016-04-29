@@ -55,15 +55,9 @@
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Other's features">
-        <Preference android:key="others_photo_capture"
+        <Preference android:key="his_feature"
                     android:summary="@string/pref_description_others_photo_capture"
                     android:title="@string/pref_title_others_photo_capture">
-
-        </Preference>
-
-        <Preference android:key="others_photo_select"
-                    android:summary="@string/pref_description_others_photo_select"
-                    android:title="@string/pref_title_others_photo_select">
 
         </Preference>
 

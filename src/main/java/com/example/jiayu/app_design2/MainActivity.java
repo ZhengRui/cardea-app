@@ -89,7 +89,6 @@ public class MainActivity extends Activity {
 
     private FloatingActionButton mFabBtnTake;
     private FloatingActionButton mFabBtnSettings;
-    private Button mBtnShow;
     private SwitchButton camSwitchBtn;
     private SwitchButton modeSwitchBtn;
 
@@ -151,18 +150,8 @@ public class MainActivity extends Activity {
         mFabBtnSettings.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent i = new Intent(MainActivity.this, SettingsSimplifiedActivity.class);
+                Intent i = new Intent(MainActivity.this, SettingActivity.class);
                 startActivityForResult(i, REQUEST_SETTINGS);
-            }
-        });
-
-
-        mBtnShow = (Button) findViewById(R.id.button_show_settings);
-        mBtnShow.setOnClickListener(new Button.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent i = new Intent(MainActivity.this, ShowActivity.class);
-                startActivityForResult(i, REQUEST_SHOW_SETTINGS);
             }
         });
 
@@ -272,7 +261,7 @@ public class MainActivity extends Activity {
         public void onPictureTaken(byte[] data, Camera camera) {
             Log.i(TAG, Integer.toString(data.length));
 
-            new socketCreationTask("10.89.28.149", 9999).execute(data); //10.89.28.149
+            new socketCreationTask("10.89.151.229", 9999).execute(data); //10.89.28.149
 
         }
     };

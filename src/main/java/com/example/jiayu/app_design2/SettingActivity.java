@@ -1,10 +1,8 @@
 package com.example.jiayu.app_design2;
 
-
-import android.annotation.TargetApi;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.location.Location;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
@@ -15,14 +13,14 @@ import android.preference.MultiSelectListPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 
-import android.preference.PreferenceFragment;
 import android.preference.PreferenceManager;
 import android.util.Log;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
-import android.widget.Toast;
 
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -31,7 +29,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.Socket;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -39,21 +41,24 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class SettingsSimplifiedActivity extends PreferenceActivity {
+public class SettingActivity extends PreferenceActivity implements sendPrefListener{
     private static final String TAG = "SettingActivity";
     private static final int REQUEST_UPLOAD_MY = 100;
-    private static final int REQUEST_UPLOAD_HIS_CAPTURE = 200;
-    private static final int REQUEST_UPLOAD_HIS_SELECT = 300;
-    private static final int MEDIA_TYPE_IMAGE = 1;
-    private static final int MEDIA_TYPE_VIDEO = 2;
-    public static final String featureFileName = "features.txt";
+    private static final int REQUEST_UPLOAD_HIS = 200;
+    public static final String myFeatureFileName = "myFeatures.txt";
+    public static final String hisFeatureFileName = "hisFeatures.txt";
 
     private Button mOk;
-    private String imgPath;
 
     private Socket mSocket;
     private OutputStream mOutputStream;
     private InputStream mInputStream;
+
+    private byte[] myFeature;
+    private byte[] hisFeature;
+
+
+    private int msgtype = 1;
 
     /**
      * A preference value change listener that updates the preference's summary
@@ -135,7 +140,9 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         mOk.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v){
-                new socketCreationTask("10.89.28.149", 9999).execute();
+                new socketCreationTask("10.89.159.44", 9999, SettingActivity.this).execute();
+
+
 
             }
         });
@@ -149,57 +156,49 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         bindPreferenceSummaryToValue(findPreference("scenario_list"));
         bindPreferenceSummaryToValue(findPreference("policy_list"));
 
+        // save sent features to SD card
+        updateFeatureSummary(myFeatureFileName);
+        updateFeatureSummary(hisFeatureFileName);
+
         Preference myPreference = (Preference) findPreference("my_feature");
         myPreference.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference preference) {
-                //ComponentName comp = new ComponentName("com.example.jiayu.app_design2",
-                //       "com.example.jiayu.app_design2.MediaActivity");
-                //Intent i = new Intent();
-                //i.setComponent(comp);
-                Intent i = new Intent(SettingsSimplifiedActivity.this, SelfieActivity.class);
+                Intent i = new Intent(SettingActivity.this, SelfieActivity.class);
+                i.putExtra(SelfieActivity.EXTRA_WHOSE_FEATURE, myFeatureFileName);
                 startActivityForResult(i, REQUEST_UPLOAD_MY);
 
                 return true;
             }
         });
 
-        Preference preferenceCapture = findPreference("others_photo_capture");
+        Preference preferenceCapture = findPreference("his_feature");
         preferenceCapture.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference preference) {
-                Intent i = new Intent(SettingsSimplifiedActivity.this, SelfieActivity.class);
-                startActivityForResult(i, REQUEST_UPLOAD_HIS_CAPTURE);
+                Intent i = new Intent(SettingActivity.this, SelfieActivity.class);
+                i.putExtra(SelfieActivity.EXTRA_WHOSE_FEATURE, hisFeatureFileName);
+                startActivityForResult(i, REQUEST_UPLOAD_HIS);
 
                 return true;
             }
         });
-
-        Preference preferenceSelect = findPreference("others_photo_select");
-        preferenceSelect.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
-            @Override
-            public boolean onPreferenceClick(Preference preference) {
-                Intent i = new Intent(SettingsSimplifiedActivity.this, MediaActivity.class);
-                startActivityForResult(i, REQUEST_UPLOAD_HIS_SELECT);
-
-                return true;
-            }
-        });
-
 
     }
 
-    private class socketCreationTask extends AsyncTask<Void, Void, Void> {
+    private class socketCreationTask extends AsyncTask<Void, Void, Boolean> {
         String desAddress;
         int dstPort;
+        private sendPrefListener listener;
 
-        socketCreationTask(String addr, int port) {
+        socketCreationTask(String addr, int port, sendPrefListener listener) {
             this.desAddress = addr;
             this.dstPort = port;
+            this.listener = listener;
         }
 
         @Override
-        protected Void doInBackground(Void... argms) {
+        protected Boolean doInBackground(Void... argms) {
             try {
                 mSocket = new Socket(desAddress, dstPort);
                 Log.i(TAG, "Socket established");
@@ -210,8 +209,14 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
 
             } catch (IOException e) {
                 e.printStackTrace();
+                return false;
             }
-            return null;
+            return true;
+        }
+
+        @Override
+        protected void onPostExecute(Boolean success) {
+            listener.onTaskCompleted(success);
         }
     }
 
@@ -221,12 +226,13 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         boolean yesGestureSwitch = sp.getBoolean("yes_gesture_switch", true);
         boolean noGestureSwitch = sp.getBoolean("no_gesture_switch", true);
         String locationText = sp.getString("location_text", null);
+        Location loc = getLocation(locationText);
 
         Set<String> scenario = sp.getStringSet("scenario_list", null);
         List<Integer> scenarios = new ArrayList<Integer>();
-        if (scenario == null) {//value = none, return -1
+        if (scenario.size() == 0) {//value = none, return 12
             scenarios.add(-1);
-        } else if (scenario.size() == 11) { //all are selected, return 0
+        } else if (scenario.size() == 10) { //all are selected, return 0
             scenarios.add(0);
         } else {
             MultiSelectListPreference scenarioListPreference = (MultiSelectListPreference) findPreference("scenario_list");
@@ -244,11 +250,21 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         ListPreference listPreference = (ListPreference) findPreference("policy_list");
         int policyInt = listPreference.findIndexOfValue(policyList);
 
-        List<float[]> featureList = SelfieActivity.totalFaceFeatures;
-        ByteArrayOutputStream tmpFeature = new ByteArrayOutputStream();
-        for (float[] array : featureList) {
+        List<float[]> myFeatureList = SelfieActivity.myTotalFaceFeatures;
+        ByteArrayOutputStream myTmpFeature = new ByteArrayOutputStream();
+        for (float[] array : myFeatureList) {
             try {
-                tmpFeature.write(floatToByte(array));
+                myTmpFeature.write(floatToByte(array));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        List<float[]> hisFeatureList = SelfieActivity.hisTotalFaceFeatures;
+        ByteArrayOutputStream hisTmpFeature = new ByteArrayOutputStream();
+        for (float[] array : hisFeatureList) {
+            try {
+                hisTmpFeature.write(floatToByte(array));
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -260,15 +276,17 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
                 // (24 bytes) size of each data | real data
                 // be careful of big_endian(python side) and little endian(c++ server side)
                 byte[] gesture = new byte[]{(byte)(yesGestureSwitch?1:0), (byte)(noGestureSwitch?1:0)};
-                byte[] location = locationText.getBytes();
+                byte[] location = doubleToByte(new double[]{loc.getLatitude(), loc.getLongitude()});
                 byte[] scene = intToByte(sceneArray);
-                byte[] policy = intToByte(new int[] {policyInt});
-                byte[] feature = tmpFeature.toByteArray();
-                byte[] header = intToByte(new int[]{1, gesture.length, location.length, scene.length,
-                                            policy.length, feature.length});
+                byte[] policy = intToByte(new int[]{policyInt});
+                myFeature = myTmpFeature.toByteArray();
+                hisFeature = hisTmpFeature.toByteArray();
+                byte[] header = intToByte(new int[]{msgtype, gesture.length, location.length, scene.length,
+                        policy.length, myFeature.length, hisFeature.length});
 
                 // size for different parts of the sending packet
-                int sizeOfData = gesture.length + location.length + scene.length + policy.length + feature.length;
+                int sizeOfData = gesture.length + location.length + scene.length + policy.length
+                                    + myFeature.length + hisFeature.length;
 
                 // combine multiple byte array together
                 ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -276,7 +294,8 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
                 outputStream.write(location);
                 outputStream.write(scene);
                 outputStream.write(policy);
-                outputStream.write(feature);
+                outputStream.write(myFeature);
+                outputStream.write(hisFeature);
                 byte[] data = outputStream.toByteArray();
 
                 // prepare for final sending packet
@@ -289,8 +308,6 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
                 mOutputStream.write(packetContent);
                 Log.i(TAG, "finish sending...");
 
-                // save sent features to SD card
-                saveFeatureToSD(featureFileName, feature);
 
                 //byte[] buffer = new byte[10];
                 //int read = mInputStream.read(buffer);
@@ -309,7 +326,6 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
                 }
             }
         } else {
-            //Log.i(TAG, "Asynctask - " + tskId + " skipped.");
         }
 
     }
@@ -319,49 +335,19 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_UPLOAD_MY) {
             Log.i(TAG, "onActivityRsult() of REQUEST_UPLOAD_MY is called...");
-            //SharedPreferences pref =  PreferenceManager.getDefaultSharedPreferences(this);
-            //SharedPreferences.Editor editor = pref.edit();
-            //Set<String> values = new HashSet<String>();
-            //values.add(data.getStringExtra(MediaActivity.EXTRA_FILE_URI));
-            //values.add(String.valueOf(data.getIntExtra(MediaActivity.NUM_OF_FEATURE, 0)));
-            //editor.putStringSet("my_feature", values);
-            //editor.commit();
 
-            Preference preference1 = findPreference("my_feature");
-            String num = null;
-            try {
-                num = "Number of features saved: " + String.valueOf(getSizeFromSD(featureFileName))
-                                + "; Number of features added: " + String.valueOf(SelfieActivity.totalFaceFeatures.size());
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            Log.i(TAG, "totoalFaceFeatures.size() = " + num);
-            preference1.setSummary(num);
+            updateFeatureSummary(myFeatureFileName);
 
-        } else if (requestCode == REQUEST_UPLOAD_HIS_CAPTURE) {
+        } else if (requestCode == REQUEST_UPLOAD_HIS) {
             //SharedPreferences pref =  PreferenceManager.getDefaultSharedPreferences(this);
             //SharedPreferences.Editor editor = pref.edit();
             //editor.putString("others_photo_capture", data.getStringExtra(MediaActivity.EXTRA_FILE_URI));
             //editor.commit();
 
-            Preference preference2 = findPreference("others_photo_capture");
-            String num = "Number of features: " + String.valueOf(SelfieActivity.totalFaceFeatures.size());
-            preference2.setSummary(num);
-
-        } else if (requestCode == REQUEST_UPLOAD_HIS_SELECT) {
-            SharedPreferences pref =  PreferenceManager.getDefaultSharedPreferences(this);
-            SharedPreferences.Editor editor = pref.edit();
-            editor.putString("others_photo_select", data.getStringExtra(MediaActivity.EXTRA_FILE_URI));
-            editor.commit();
-
-            Preference preference3 = findPreference("others_photo_select");
-            String num = String.valueOf(data.getIntExtra(MediaActivity.NUM_OF_FEATURE, 0));
-            preference3.setSummary(num);
-
+            updateFeatureSummary(hisFeatureFileName);
         }
         super.onActivityResult(requestCode, resultCode, data);
     }
-
 
     private byte[] intToByte(int[] input) {
         byte[] output = new byte[input.length*4];
@@ -386,8 +372,81 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
     private byte[] floatToByte(float[] input) {
         byte[] output = new byte[input.length*4];
         for (int i=0; i < input.length; i++)
-            ByteBuffer.wrap(output, 4 * i, 4).order(ByteOrder.LITTLE_ENDIAN).putDouble(input[i]);
+            ByteBuffer.wrap(output, 4 * i, 4).order(ByteOrder.LITTLE_ENDIAN).putFloat(input[i]);
         return output;
+    }
+
+    private Location getLocation(String address) {
+        HttpURLConnection conn = null;
+        String data = "address=" + URLEncoder.encode(address) + "&sensor=false";
+        String url = "http://maps.google.com/maps/api/geocode/json?" + data;
+        String result = null;
+
+        try {
+            URL mURL = new URL(url);
+            conn = (HttpURLConnection) mURL.openConnection();
+
+            conn.setRequestMethod("GET");
+            conn.setReadTimeout(5000);
+            conn.setConnectTimeout(10000);
+
+            int responseCode = conn.getResponseCode();
+            if (responseCode == 200) {
+                InputStream is = conn.getInputStream();
+                result = getStringFromInputStream(is);
+
+                //return result;
+            } else {
+                Log.i(TAG, "http URL connection failed...");
+            }
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
+
+        Location loc = null;
+        try {
+            JSONObject jsonObject = new JSONObject(result.toString());
+            JSONObject location = null;
+            location = jsonObject.getJSONArray("results").getJSONObject(0)
+                    .getJSONObject("geometry").getJSONObject("location");
+
+            double latitude = location.getDouble("lat");
+            double longitude = location.getDouble("lng");
+
+            loc = new Location("");
+            loc.setLatitude(latitude);
+            loc.setLongitude(longitude);
+            Log.d(TAG, "latitude is " + latitude + ", longitude is " + longitude);
+
+            return loc;
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return loc;
+    }
+
+    private String getStringFromInputStream(InputStream is) throws IOException{
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+
+        byte[] buffer = new byte[1024];
+        int len = -1;
+
+        while ((len = is.read(buffer)) != -1) {
+            os.write(buffer, 0, len);
+        }
+        is.close();
+        String result = os.toString();
+        os.close();
+
+        return result;
+
     }
 
     private void saveFeatureToSD(String fileName, byte[] features) throws IOException {
@@ -399,7 +458,16 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
 
         if(fileOutputStream != null) {            //关闭FileOutputStream对象
             fileOutputStream.close();
-            Toast.makeText(SettingsSimplifiedActivity.this, "Features saved", Toast.LENGTH_SHORT).show();
+
+            if (fileName == myFeatureFileName) {
+                SelfieActivity.myTotalFaceFeatures.clear();
+                updateFeatureSummary(myFeatureFileName);
+
+            } else if(fileName == hisFeatureFileName) {
+                SelfieActivity.hisTotalFaceFeatures.clear();
+                updateFeatureSummary(hisFeatureFileName);
+            }
+
         }
     }
 
@@ -413,4 +481,44 @@ public class SettingsSimplifiedActivity extends PreferenceActivity {
         return size;
     }
 
+    private void updateFeatureSummary(String name) {
+        if (name == myFeatureFileName) {
+            Preference preference = findPreference("my_feature");
+            String num = null;
+            try {
+                num = "Number of features saved: " + String.valueOf(getSizeFromSD(myFeatureFileName))
+                        + "; Number of features added: " + String.valueOf(SelfieActivity.myTotalFaceFeatures.size());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            preference.setSummary(num);
+        } else if (name == hisFeatureFileName) {
+            Preference preference = findPreference("his_feature");
+            String num = null;
+            try {
+                num = "Number of features saved: " + String.valueOf(getSizeFromSD(hisFeatureFileName))
+                        + "; Number of features added: " + String.valueOf(SelfieActivity.hisTotalFaceFeatures.size());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            preference.setSummary(num);
+        }
+    }
+
+    @Override
+    public void onTaskCompleted(boolean result) {
+        if (result) {// save sent features to SD card
+            try {
+                saveFeatureToSD(myFeatureFileName, myFeature);
+                saveFeatureToSD(hisFeatureFileName, hisFeature);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+}
+
+interface sendPrefListener {
+    void onTaskCompleted(boolean result);
 }

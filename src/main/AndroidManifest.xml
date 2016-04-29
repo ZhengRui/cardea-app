@@ -32,13 +32,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".SettingsSimplifiedActivity"
-            android:label="@string/app_name"/>
-        <activity
-            android:name=".ShowActivity"
-            android:label="@string/app_name"/>
-        <activity
-            android:name=".MediaActivity"
+            android:name=".SettingActivity"
             android:label="@string/app_name"/>
         <activity
             android:name=".SelfieActivity"
