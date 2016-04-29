@@ -82,8 +82,8 @@ public class SelfieActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_selfie);
 
-        isMyFeature = getIntent().getStringExtra(EXTRA_WHOSE_FEATURE).equals(SettingActivity.myFeatureFileName) ? true:false;
-        Log.i(TAG, "getIntent() returns " + getIntent().getStringExtra(EXTRA_WHOSE_FEATURE) + "; myFeatureFileName is " + SettingActivity.myFeatureFileName);
+        isMyFeature = getIntent().getIntExtra(EXTRA_WHOSE_FEATURE, -1) == SettingActivity.REQUEST_UPLOAD_MY ? true:false;
+        //Log.i(TAG, "getIntent() returns " + getIntent().getStringExtra(EXTRA_WHOSE_FEATURE) + "; myFeatureFileName is " + SettingActivity.myFeatureFileName);
 
 
         mPreview = (SurfaceView) findViewById(R.id.selfiePreview);

@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <PreferenceCategory android:title="Username">
+        <EditTextPreference
+            android:capitalize="words"
+            android:defaultValue=""
+            android:inputType="textCapWords"
+            android:key="username_text"
+            android:maxLines="1"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/pref_title_display_username"/>
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="My features">
         <Preference
             android:key="my_feature"
