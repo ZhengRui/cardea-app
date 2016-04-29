@@ -43,10 +43,11 @@ import java.util.Set;
 
 public class SettingActivity extends PreferenceActivity implements sendPrefListener{
     private static final String TAG = "SettingActivity";
-    private static final int REQUEST_UPLOAD_MY = 100;
-    private static final int REQUEST_UPLOAD_HIS = 200;
-    public static final String myFeatureFileName = "myFeatures.txt";
-    public static final String hisFeatureFileName = "hisFeatures.txt";
+    public static final int REQUEST_UPLOAD_MY = 100;
+    public static final int REQUEST_UPLOAD_HIS = 200;
+
+    private static String myFeatureFileName = "myFeatures.txt";
+    private static String hisFeatureFileName = "hisFeatures.txt";
 
     private Button mOk;
 
@@ -57,14 +58,15 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
     private byte[] myFeature;
     private byte[] hisFeature;
 
-
     private int msgtype = 1;
+
+    private static String mUser;
 
     /**
      * A preference value change listener that updates the preference's summary
      * to reflect its new value.
      */
-    private static Preference.OnPreferenceChangeListener sBindPreferenceSummaryToValueListener = new Preference.OnPreferenceChangeListener() {
+    private Preference.OnPreferenceChangeListener sBindPreferenceSummaryToValueListener = new Preference.OnPreferenceChangeListener() {
         @Override
         public boolean onPreferenceChange(Preference preference, Object value) {
             String stringValue = value.toString();
@@ -92,6 +94,11 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
                     }
                     preference.setSummary(result);
                 }
+            } else if (preference.getKey().equals("username_text")){
+                preference.setSummary(stringValue);
+                mUser = stringValue;
+                updateFileName(mUser);
+
             } else {
                 // For all other preferences, set the summary to the value's
                 // simple string representation.
@@ -110,7 +117,7 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
      *
      * @see #sBindPreferenceSummaryToValueListener
      */
-    private static void bindPreferenceSummaryToValue(Preference preference) {
+    private void bindPreferenceSummaryToValue(Preference preference) {
         // Set the listener to watch for value changes.
         preference.setOnPreferenceChangeListener(sBindPreferenceSummaryToValueListener);
 
@@ -121,12 +128,23 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
                     PreferenceManager
                             .getDefaultSharedPreferences(preference.getContext())
                             .getStringSet(preference.getKey(), null));
-        } else {
+        } else if (preference.getKey().equals("username_text")) {
             sBindPreferenceSummaryToValueListener.onPreferenceChange(preference,
                     PreferenceManager
                             .getDefaultSharedPreferences(preference.getContext())
                             .getString(preference.getKey(), ""));
+            mUser = PreferenceManager
+                    .getDefaultSharedPreferences(preference.getContext())
+                    .getString(preference.getKey(), null);
+            updateFileName(mUser);
+
+        } else {
+                sBindPreferenceSummaryToValueListener.onPreferenceChange(preference,
+                        PreferenceManager
+                                .getDefaultSharedPreferences(preference.getContext())
+                                .getString(preference.getKey(), ""));
         }
+
     }
 
 
@@ -142,8 +160,6 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
             public void onClick(View v){
                 new socketCreationTask("10.89.159.44", 9999, SettingActivity.this).execute();
 
-
-
             }
         });
 
@@ -152,6 +168,7 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
         // to their values. When their values change, their summaries are
         // updated to reflect the new value, per the Android Design
         // guidelines.
+        bindPreferenceSummaryToValue(findPreference("username_text"));
         bindPreferenceSummaryToValue(findPreference("location_text"));
         bindPreferenceSummaryToValue(findPreference("scenario_list"));
         bindPreferenceSummaryToValue(findPreference("policy_list"));
@@ -160,12 +177,12 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
         updateFeatureSummary(myFeatureFileName);
         updateFeatureSummary(hisFeatureFileName);
 
-        Preference myPreference = (Preference) findPreference("my_feature");
+        Preference myPreference = findPreference("my_feature");
         myPreference.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
             @Override
             public boolean onPreferenceClick(Preference preference) {
                 Intent i = new Intent(SettingActivity.this, SelfieActivity.class);
-                i.putExtra(SelfieActivity.EXTRA_WHOSE_FEATURE, myFeatureFileName);
+                i.putExtra(SelfieActivity.EXTRA_WHOSE_FEATURE, REQUEST_UPLOAD_MY);
                 startActivityForResult(i, REQUEST_UPLOAD_MY);
 
                 return true;
@@ -177,7 +194,7 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
             @Override
             public boolean onPreferenceClick(Preference preference) {
                 Intent i = new Intent(SettingActivity.this, SelfieActivity.class);
-                i.putExtra(SelfieActivity.EXTRA_WHOSE_FEATURE, hisFeatureFileName);
+                i.putExtra(SelfieActivity.EXTRA_WHOSE_FEATURE, REQUEST_UPLOAD_HIS);
                 startActivityForResult(i, REQUEST_UPLOAD_HIS);
 
                 return true;
@@ -198,14 +215,14 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
         }
 
         @Override
-        protected Boolean doInBackground(Void... argms) {
+        protected Boolean doInBackground(Void... args) {
             try {
                 mSocket = new Socket(desAddress, dstPort);
                 Log.i(TAG, "Socket established");
                 mOutputStream = mSocket.getOutputStream();
                 mInputStream = mSocket.getInputStream();
 
-                sendPrefence();
+                sendPreference();
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -220,9 +237,10 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
         }
     }
 
-    private void sendPrefence() {
+    private void sendPreference() {
         SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
 
+        String usernameText = sp.getString("username_text", null);
         boolean yesGestureSwitch = sp.getBoolean("yes_gesture_switch", true);
         boolean noGestureSwitch = sp.getBoolean("no_gesture_switch", true);
         String locationText = sp.getString("location_text", null);
@@ -275,21 +293,23 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
             try {
                 // (24 bytes) size of each data | real data
                 // be careful of big_endian(python side) and little endian(c++ server side)
+                byte[] username = usernameText.getBytes();
                 byte[] gesture = new byte[]{(byte)(yesGestureSwitch?1:0), (byte)(noGestureSwitch?1:0)};
                 byte[] location = doubleToByte(new double[]{loc.getLatitude(), loc.getLongitude()});
                 byte[] scene = intToByte(sceneArray);
                 byte[] policy = intToByte(new int[]{policyInt});
                 myFeature = myTmpFeature.toByteArray();
                 hisFeature = hisTmpFeature.toByteArray();
-                byte[] header = intToByte(new int[]{msgtype, gesture.length, location.length, scene.length,
-                        policy.length, myFeature.length, hisFeature.length});
+                byte[] header = intToByte(new int[]{msgtype, username.length, gesture.length, location.length,
+                        scene.length, policy.length, myFeature.length, hisFeature.length});
 
                 // size for different parts of the sending packet
-                int sizeOfData = gesture.length + location.length + scene.length + policy.length
-                                    + myFeature.length + hisFeature.length;
+                int sizeOfData = username.length + gesture.length + location.length + scene.length + policy.length
+                        + myFeature.length + hisFeature.length;
 
                 // combine multiple byte array together
                 ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                outputStream.write(username);
                 outputStream.write(gesture);
                 outputStream.write(location);
                 outputStream.write(scene);
@@ -481,8 +501,8 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
         return size;
     }
 
-    private void updateFeatureSummary(String name) {
-        if (name == myFeatureFileName) {
+    private void updateFeatureSummary(String fileName) {
+        if (fileName == myFeatureFileName) {
             Preference preference = findPreference("my_feature");
             String num = null;
             try {
@@ -492,7 +512,7 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
                 e.printStackTrace();
             }
             preference.setSummary(num);
-        } else if (name == hisFeatureFileName) {
+        } else if (fileName == hisFeatureFileName) {
             Preference preference = findPreference("his_feature");
             String num = null;
             try {
@@ -503,6 +523,14 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
             }
             preference.setSummary(num);
         }
+    }
+
+    private void updateFileName(String username) {
+        myFeatureFileName = "myFeature_" + username + ".txt";
+        hisFeatureFileName = "hisFeature_" + username + ".txt";
+
+        updateFeatureSummary(myFeatureFileName);
+        updateFeatureSummary(hisFeatureFileName);
     }
 
     @Override

@@ -7,6 +7,9 @@
     <string name="save_button">Save</string>
 
     <!-- Strings related to Settings -->
+    
+    <!-- Username-->
+    <string name="pref_title_display_username">Input your username</string>
 
     <!-- My features -->
     <string name="pref_header_profile">My profile setting</string>
