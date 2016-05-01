@@ -196,7 +196,6 @@ public class MainActivity extends Activity {
             }
         };
 
-        /**
         // load model using async task
         if (fdetector == null || caffeFace == null || caffeScene == null) {
 
@@ -207,7 +206,6 @@ public class MainActivity extends Activity {
             loadingDialog.setCancelable(false);
             loadingDialog.show();
         }
-         */
 
         buildGoogleApiClient();
     }
@@ -261,7 +259,7 @@ public class MainActivity extends Activity {
         public void onPictureTaken(byte[] data, Camera camera) {
             Log.i(TAG, Integer.toString(data.length));
 
-            new socketCreationTask("10.89.151.229", 9999).execute(data); //10.89.28.149
+            new socketCreationTask("10.89.28.149", 9999).execute(data); //10.89.28.149
 
         }
     };
@@ -296,6 +294,7 @@ public class MainActivity extends Activity {
         if (mOutputStream != null ) {   // oStream maybe set to null by previous failed asynctask
             Log.i(TAG, "mOutputStream is not null, and sendFrm() is running...");
             try {
+                frmdata = fdetector.droidJPEGCalibrate(frmdata, front1back0, orientCase);
                 // header: 6+2个整数 2 个double，最后一个整数存的就是后面frame size
                 // be careful of big_endian(python side) and little endian(c++ server side)
                 int dataSize = frmdata.length;
@@ -461,15 +460,15 @@ public class MainActivity extends Activity {
             fdetector.loadShapePredictor(landmarksFilePath);
         }
 
-        if (caffeFace == null) {
-            caffeFace = new CaffeMobile(faceProtoPath, faceModelPath);
-            caffeFace.setNumThreads(2);
-        }
-
-        if (caffeScene == null) {
-            caffeScene = new CaffeMobile(sceneProtoPath, sceneModelPath);
-            caffeScene.setNumThreads(2);
-        }
+//        if (caffeFace == null) {
+//            caffeFace = new CaffeMobile(faceProtoPath, faceModelPath);
+//            caffeFace.setNumThreads(2);
+//        }
+//
+//        if (caffeScene == null) {
+//            caffeScene = new CaffeMobile(sceneProtoPath, sceneModelPath);
+//            caffeScene.setNumThreads(2);
+//        }
     }
 
 
