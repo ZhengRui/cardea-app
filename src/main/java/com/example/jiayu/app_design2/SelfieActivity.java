@@ -85,7 +85,6 @@ public class SelfieActivity extends Activity {
         isMyFeature = getIntent().getIntExtra(EXTRA_WHOSE_FEATURE, -1) == SettingActivity.REQUEST_UPLOAD_MY ? true:false;
         //Log.i(TAG, "getIntent() returns " + getIntent().getStringExtra(EXTRA_WHOSE_FEATURE) + "; myFeatureFileName is " + SettingActivity.myFeatureFileName);
 
-
         mPreview = (SurfaceView) findViewById(R.id.selfiePreview);
         mPreviewHolder = mPreview.getHolder();
         mPreviewHolder.addCallback(surfaceCallback);
@@ -137,6 +136,9 @@ public class SelfieActivity extends Activity {
             fdetReady = true;
             fcaffeReady = true;
         }
+
+//        Log.i(TAG, "Total feature size:" + myTotalFaceFeatures.size() + ", " + hisTotalFaceFeatures.size());
+
     }
 
     private class initializeTask extends AsyncTask<Void, Void, Boolean> {
@@ -291,14 +293,12 @@ public class SelfieActivity extends Activity {
         if (isMyFeature) {
             for (int i=0; i < batchFaceFeatures.length; i++)
                 myTotalFaceFeatures.add(batchFaceFeatures[i]);
-            Log.i(TAG, "Total # of face my features: " + String.valueOf(myTotalFaceFeatures.size()));
+            Log.i(TAG, "Total # of my features: " + String.valueOf(myTotalFaceFeatures.size()));
         } else {
             for (int i=0; i < batchFaceFeatures.length; i++)
                 hisTotalFaceFeatures.add(batchFaceFeatures[i]);
-            Log.i(TAG, "Total # of face features: " + String.valueOf(hisTotalFaceFeatures.size()));
+            Log.i(TAG, "Total # of his features: " + String.valueOf(hisTotalFaceFeatures.size()));
         }
-
-
     }
 
     private void initPreview(int width, int height) {

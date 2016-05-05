@@ -163,7 +163,6 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
             }
         });
 
-
         // Bind the summaries of EditText/List/Dialog/Ringtone preferences
         // to their values. When their values change, their summaries are
         // updated to reflect the new value, per the Android Design
@@ -200,6 +199,7 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
                 return true;
             }
         });
+
 
     }
 
@@ -543,17 +543,6 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
                 e.printStackTrace();
             }
         }
-    }
-
-    @Override
-    public void onStop(){
-        SelfieActivity.myTotalFaceFeatures.clear();
-        updateFeatureSummary(myFeatureFileName);
-
-        SelfieActivity.hisTotalFaceFeatures.clear();
-        updateFeatureSummary(hisFeatureFileName);
-
-        super.onStop();
     }
 
 }
