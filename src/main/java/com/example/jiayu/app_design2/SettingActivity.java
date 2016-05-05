@@ -90,9 +90,9 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
                     String result = "";
                     for (String tmp : values) {
                         int index = multiSelectListPreference.findIndexOfValue(tmp);
-                        result += multiSelectListPreference.getEntries()[index] + ", ";
+                        result += ", " + multiSelectListPreference.getEntries()[index];
                     }
-                    preference.setSummary(result);
+                    preference.setSummary(result.length() > 0 ? result.substring(2) : "");
                 }
             } else if (preference.getKey().equals("username_text")){
                 preference.setSummary(stringValue);
@@ -158,7 +158,7 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
         mOk.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v){
-                new socketCreationTask("10.89.159.44", 9999, SettingActivity.this).execute();
+                new socketCreationTask("10.89.28.149", 9999, SettingActivity.this).execute();
 
             }
         });
