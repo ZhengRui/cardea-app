@@ -5,26 +5,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
-import android.graphics.SweepGradient;
-import android.graphics.drawable.Drawable;
 import android.hardware.Camera;
 import android.hardware.SensorManager;
 import android.location.Location;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.SystemClock;
-import android.provider.MediaStore;
-import android.support.v7.app.AppCompatActivity;
-import android.text.Spannable;
-import android.text.SpannableString;
-import android.text.style.ImageSpan;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.OrientationEventListener;
-import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -35,38 +24,23 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
 import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
-import com.google.android.gms.location.LocationListener;
-import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import com.github.clans.fab.FloatingActionButton;
 import com.kyleduo.switchbutton.SwitchButton;
 import com.rzheng.fdlib.FaceDetector;
 import com.sh1r0.caffe_android_lib.CaffeMobile;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.Socket;
-import java.net.URL;
-import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.LinkedList;
-import java.util.Queue;
 
 import cn.pedant.SweetAlert.SweetAlertDialog;
 
@@ -208,6 +182,7 @@ public class MainActivity extends Activity {
         }
 
         buildGoogleApiClient();
+
     }
 
 
@@ -349,6 +324,9 @@ public class MainActivity extends Activity {
         @Override
         public void surfaceCreated(SurfaceHolder holder) {
             Log.i(TAG, "surfaceCreated() called...");
+            Log.i(TAG, "Clear Total Feature Cache.");
+            SelfieActivity.myTotalFaceFeatures.clear();
+            SelfieActivity.hisTotalFaceFeatures.clear();
         }
 
         @Override
