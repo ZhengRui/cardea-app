@@ -460,11 +460,11 @@ public class MainActivity extends Activity {
             fdetector.loadShapePredictor(landmarksFilePath);
         }
 
-//        if (caffeFace == null) {
-//            caffeFace = new CaffeMobile(faceProtoPath, faceModelPath);
-//            caffeFace.setNumThreads(2);
-//        }
-//
+        if (caffeFace == null) {
+            caffeFace = new CaffeMobile(faceProtoPath, faceModelPath);
+            caffeFace.setNumThreads(2);
+        }
+
 //        if (caffeScene == null) {
 //            caffeScene = new CaffeMobile(sceneProtoPath, sceneModelPath);
 //            caffeScene.setNumThreads(2);
