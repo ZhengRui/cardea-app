@@ -545,6 +545,17 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
         }
     }
 
+    @Override
+    public void onStop(){
+        SelfieActivity.myTotalFaceFeatures.clear();
+        updateFeatureSummary(myFeatureFileName);
+
+        SelfieActivity.hisTotalFaceFeatures.clear();
+        updateFeatureSummary(hisFeatureFileName);
+
+        super.onStop();
+    }
+
 }
 
 interface sendPrefListener {
