@@ -41,6 +41,9 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 import cn.pedant.SweetAlert.SweetAlertDialog;
 
@@ -77,6 +80,7 @@ public class MainActivity extends Activity {
 
     private int orientCase;
     private int msgtype = 0;
+    private int mode = 0; // 0 weak mode 1 strong mode
 
     private static final String DATA_PATH = Environment.getExternalStorageDirectory().toString() + "/ContextPrivacy/";
     private String landmarksFilePath = DATA_PATH + "shape_predictor_68_face_landmarks.dat";
@@ -273,7 +277,7 @@ public class MainActivity extends Activity {
                 // header: 6+2个整数 2 个double，最后一个整数存的就是后面frame size
                 // be careful of big_endian(python side) and little endian(c++ server side)
                 int dataSize = frmdata.length;
-                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, imgSize.width, imgSize.height, dataSize, 0, 0});
+                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, imgSize.width, imgSize.height, dataSize, mode, 0});
                 byte[] headerGeo = doubleToByte(new double[] {latitude, longitude});
                 int headerSize = headerMisc.length + headerGeo.length;
                 byte[] packetContent = new byte[headerSize + dataSize];
@@ -290,12 +294,86 @@ public class MainActivity extends Activity {
 
                 Log.i(TAG, "start sending...");
                 mOutputStream.write(packetContent);
+                mOutputStream.flush();
                 Log.i(TAG, "finish sending...");
 
-                //byte[] buffer = new byte[10];
-                //int read = mInputStream.read(buffer);
                 long endTime = SystemClock.uptimeMillis();
                 Log.i(TAG, String.format("time of sending the frame: %d ms", endTime - startTime));
+
+                byte[] headerRES = new byte[8];
+                int resHeaderSize = mInputStream.read(headerRES);
+                assert(resHeaderSize == 8);
+                int[] resSizes = byteToInt(headerRES);
+                Log.i(TAG, Arrays.toString(resSizes));
+                int resSizeTot = resSizes[0] + resSizes[1];
+                byte[] dataRES = new byte[resSizeTot];
+                int resDataSize = mInputStream.read(dataRES);
+                assert(resDataSize == resSizeTot);
+                Log.i(TAG, "total result data length: " + dataRES.length);
+
+                int bbxnum = resSizes[0] / 60 + resSizes[1] / 24;
+                int[][] bbxposArr = new int[bbxnum][4];
+                String[] bbxtxtArr = new String[bbxnum];
+                boolean[] bbxprocArr = new boolean[bbxnum];
+                int[] bbxproctypeArr = new int[bbxnum];
+
+                int ibbx = 0;
+                // parse face result
+                for (int i = 0; i < resSizes[0]; i += 60) {
+                    int[] bbxpos = byteToInt(Arrays.copyOfRange(dataRES, i, i+16));
+                    String username = new String(Arrays.copyOfRange(dataRES, i+16, i+44)).trim();
+                    String facecase = new String(Arrays.copyOfRange(dataRES, i+44, i+46));
+                    int policy = byteToInt(Arrays.copyOfRange(dataRES, i+56, i+60))[0];
+                    Log.i(TAG, "face bbx: " + Arrays.toString(bbxpos) + ", username: " + username +
+                            ", facecase: " + facecase + ", policy: " + policy);
+
+                    if (facecase.equals("c5")) {  // need scene results for decision
+                        String scenes = new String(Arrays.copyOfRange(dataRES, i + 46, i + 56));
+                        Log.i(TAG, "scenes: " + scenes);
+
+                        // based on scene, make final decision of
+                        // facecase c5(blur) or c6(don't blur)
+                    }
+
+                    bbxposArr[ibbx] = bbxpos;
+                    bbxtxtArr[ibbx] = username + " " + facecase;
+
+                    // c0: not registered user
+                    // c1: no gesture
+                    // c2: yes gesture
+                    // c3: out of distance
+                    // c4: other feature matched
+                    // c5: scene matched
+                    // c6: pass all
+
+                    if (facecase.equals("c0") || facecase.equals("c2") ||
+                            facecase.equals("c3") || facecase.equals("c6"))
+                        bbxprocArr[ibbx] = false;
+                    else
+                        bbxprocArr[ibbx] = true;
+
+                    bbxproctypeArr[ibbx] = policy;
+                    ibbx += 1;
+                }
+
+                // parse hand result
+                for (int i = resSizes[0]; i < resDataSize; i += 24) {
+                    int[] bbxpos = byteToInt(Arrays.copyOfRange(dataRES, i, i+16));
+                    int bbxcls = byteToInt(Arrays.copyOfRange(dataRES, i+16, i+20))[0];
+                    float scr = ByteBuffer.wrap(Arrays.copyOfRange(dataRES, i+20, i+24)).order(ByteOrder.LITTLE_ENDIAN).getFloat();
+                    Log.i(TAG, "hand bbx: " + Arrays.toString(bbxpos) + ", class: "
+                            + bbxcls + ", score: " + scr);
+
+                    bbxposArr[ibbx] = bbxpos;
+                    bbxtxtArr[ibbx] = (bbxcls == 2 ? "yes" : (bbxcls == 3 ? "no" : "normal")) + " " + scr;
+                    bbxprocArr[ibbx] = false;
+                    bbxproctypeArr[ibbx] = -1;
+                    ibbx += 1;
+                }
+
+                // pass to jni for image processing
+                if (bbxnum > 0)
+                    frmdata = fdetector.boxesProcess(frmdata, bbxposArr, bbxtxtArr, bbxprocArr, bbxproctypeArr);
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -468,7 +546,7 @@ public class MainActivity extends Activity {
     }
 
     private void switchMode() {
-
+        mode = 1 - mode;
     }
 
     private byte[] intToByte(int[] input) {
@@ -481,6 +559,18 @@ public class MainActivity extends Activity {
             output[i*4 + 3] = (byte)((input[i] & 0xFF000000) >>> 24);
         }
 
+        return output;
+    }
+
+    private int[] byteToInt(byte[] input) {
+        int[] output = new int[input.length/4];
+
+        for (int i = 0; i < input.length; i += 4) {
+            output[i/4] = input[i] & 0xFF |
+                    (input[i+1] & 0xFF) << 8 |
+                    (input[i+2] & 0xFF) << 16 |
+                    (input[i+3] & 0xFF) << 24;
+        }
         return output;
     }
 
