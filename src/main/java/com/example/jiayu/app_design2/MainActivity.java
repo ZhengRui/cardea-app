@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.PixelFormat;
 import android.hardware.Camera;
 import android.hardware.SensorManager;
@@ -86,6 +87,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
     private Socket mSocket;
     private OutputStream mOutputStream;
     private InputStream mInputStream;
+    private byte[] mResultFrm;
 
     private int orientCase;
     private int msgtype = 0;
@@ -111,11 +113,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         System.loadLibrary("caffe_jni");
     }
 
-    /**
-     * ATTENTION: This was auto-generated to implement the App Indexing API.
-     * See https://g.co/AppIndexing/AndroidStudio for more information.
-     */
-    private GoogleApiClient mClient;
+
 
 
     @Override
@@ -182,6 +180,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                 mImageView.setVisibility(View.INVISIBLE);
                 mFabBtnYes.setVisibility(View.GONE);
                 mFabBtnNo.setVisibility(View.GONE);
+
                 startPreview();
             }
         });
@@ -194,6 +193,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                 mImageView.setVisibility(View.INVISIBLE);
                 mFabBtnYes.setVisibility(View.GONE);
                 mFabBtnNo.setVisibility(View.GONE);
+
                 startPreview();
             }
         });
@@ -229,10 +229,6 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         }
 
         buildGoogleApiClient();
-
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        mClient = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
     }
 
 
@@ -332,6 +328,8 @@ public class MainActivity extends Activity implements AsyncTaskListener {
             Log.i(TAG, "mOutputStream is not null, and sendFrm() is running...");
             try {
                 frmdata = fdetector.droidJPEGCalibrate(frmdata, front1back0, orientCase);
+                mResultFrm = frmdata;
+
                 // header: 6+2个整数 2 个double，最后一个整数存的就是后面frame size
                 // be careful of big_endian(python side) and little endian(c++ server side)
                 int dataSize = frmdata.length;
@@ -432,7 +430,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
 
                 // pass to jni for image processing
                 if (bbxnum > 0)
-                    frmdata = fdetector.boxesProcess(frmdata, bbxposArr, bbxtxtArr, bbxprocArr, bbxproctypeArr);
+                    mResultFrm = fdetector.boxesProcess(frmdata, bbxposArr, bbxtxtArr, bbxprocArr, bbxproctypeArr);
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -460,7 +458,16 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         mFabBtnYes.setVisibility(View.VISIBLE);
         mFabBtnNo.setVisibility(View.VISIBLE);
 
-        Bitmap bitmap = BitmapFactory.decodeFile(DATA_PATH + "test.png");
+        Bitmap bitmap = BitmapFactory.decodeByteArray(mResultFrm, 0, mResultFrm.length);
+
+        Matrix matrix = new Matrix();
+        matrix.postRotate(360 - 90 * orientCase);
+
+        if (front1back0 == 1) {
+            matrix.preScale(-1, 1);
+        }
+
+        bitmap = Bitmap.createBitmap(bitmap , 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
         mImageView.setImageBitmap(bitmap);
     }
 
@@ -663,23 +670,9 @@ public class MainActivity extends Activity implements AsyncTaskListener {
     @Override
     protected void onStart() {
         super.onStart();
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        mClient.connect();
+
         mGoogleApiClient.connect();
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        Action viewAction = Action.newAction(
-                Action.TYPE_VIEW, // TODO: choose an action type.
-                "Main Page", // TODO: Define a title for the content shown.
-                // TODO: If you have web page content that matches this app activity's content,
-                // make sure this auto-generated web page URL is correct.
-                // Otherwise, set the URL to null.
-                Uri.parse("http://host/path"),
-                // TODO: Make sure this auto-generated app deep link URI is correct.
-                Uri.parse("android-app://com.example.jiayu.app_design2/http/host/path")
-        );
-        AppIndex.AppIndexApi.start(mClient, viewAction);
+
     }
 
     @Override
@@ -711,22 +704,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
             mGoogleApiClient.disconnect();
         }
         super.onStop();
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        Action viewAction = Action.newAction(
-                Action.TYPE_VIEW, // TODO: choose an action type.
-                "Main Page", // TODO: Define a title for the content shown.
-                // TODO: If you have web page content that matches this app activity's content,
-                // make sure this auto-generated web page URL is correct.
-                // Otherwise, set the URL to null.
-                Uri.parse("http://host/path"),
-                // TODO: Make sure this auto-generated app deep link URI is correct.
-                Uri.parse("android-app://com.example.jiayu.app_design2/http/host/path")
-        );
-        AppIndex.AppIndexApi.end(mClient, viewAction);
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        mClient.disconnect();
+
     }
 
     @Override
