@@ -19,7 +19,7 @@ android {
     }
     sourceSets {
         main {
-            jniLibs.srcDirs = ['../libraries/fdlib/src/main/jniLibs', '../libraries/caffe_android_lib/src/main/jniLibs']
+            jniLibs.srcDirs = ['../Libraries/fdlib/src/main/jniLibs', '../Libraries/caffe_android_lib/src/main/jniLibs']
         }
     }
 }
@@ -33,7 +33,7 @@ dependencies {
     compile 'cn.pedant.sweetalert:library:1.3'
     compile 'com.kyleduo.switchbutton:library:1.4.0'
     compile 'com.github.clans:fab:1.6.3'
-    compile project(':libraries:caffe_android_lib')
-    compile project(':libraries:fdlib')
+    compile project(':Libraries:caffe_android_lib')
+    compile project(':Libraries:fdlib')
     compile 'com.google.android.gms:play-services:8.4.0'
 }

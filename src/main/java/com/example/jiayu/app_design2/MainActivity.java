@@ -426,7 +426,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                     bbxposArr[ibbx] = bbxpos;
                     bbxtxtArr[ibbx] = (bbxcls == 2 ? "yes" : (bbxcls == 3 ? "no" : "normal")) + " " + scr;
                     bbxprocArr[ibbx] = false;
-                    bbxproctypeArr[ibbx] = -1;
+                    bbxproctypeArr[ibbx] = 2;
                     ibbx += 1;
                 }
 
