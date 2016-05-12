@@ -29,30 +29,30 @@
 
 
     <com.github.clans.fab.FloatingActionButton
-            android:id="@+id/fab_button_take_photo"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="30dp"
-            android:src="@drawable/ic_take_picture_mid"
-            app:fab_colorNormal="#30FF5449"
-            app:fab_colorPressed="#70E75043"
-            app:fab_colorRipple="#80FFFFFF"
-            app:fab_showShadow="true"
-            app:fab_shadowColor="#66000000"
-            app:fab_shadowRadius="4dp"
-            app:fab_shadowXOffset="1dp"
-            app:fab_shadowYOffset="3dp"
-            app:fab_size="normal"
-            app:fab_showAnimation="@anim/fab_scale_up"
-            app:fab_hideAnimation="@anim/fab_scale_down"
-            app:fab_label=""
-            app:fab_progress_color="#FF009688"
-            app:fab_progress_backgroundColor="#4D000000"
-            app:fab_progress_indeterminate="false"
-            app:fab_progress_max="100"
-            app:fab_progress="0"
-            app:fab_progress_showBackground="true"/>
+        android:id="@+id/fab_button_take_photo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal|bottom"
+        android:layout_marginBottom="30dp"
+        android:src="@drawable/ic_take_picture_mid"
+        app:fab_colorNormal="#30FF5449"
+        app:fab_colorPressed="#70E75043"
+        app:fab_colorRipple="#80FFFFFF"
+        app:fab_showShadow="true"
+        app:fab_shadowColor="#66000000"
+        app:fab_shadowRadius="4dp"
+        app:fab_shadowXOffset="1dp"
+        app:fab_shadowYOffset="3dp"
+        app:fab_size="normal"
+        app:fab_showAnimation="@anim/fab_scale_up"
+        app:fab_hideAnimation="@anim/fab_scale_down"
+        app:fab_label=""
+        app:fab_progress_color="#FF009688"
+        app:fab_progress_backgroundColor="#4D000000"
+        app:fab_progress_indeterminate="false"
+        app:fab_progress_max="100"
+        app:fab_progress="0"
+        app:fab_progress_showBackground="true"/>
 
     <com.github.clans.fab.FloatingActionButton
         android:id="@+id/fab_button_settings"
@@ -101,5 +101,37 @@
         app:kswTextOn="B"
         android:layout_gravity="right|bottom" />
 
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:id="@+id/imageView"
+        android:layout_gravity="center_horizontal"/>
+
+    <com.github.clans.fab.FloatingActionButton
+        android:id="@+id/fab_button_yes"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="left|bottom"
+        android:layout_marginLeft="60dp"
+        android:layout_marginBottom="46dp"
+        android:src="@drawable/ic_yes"
+        app:fab_colorNormal="#30FF5449"
+        app:fab_colorPressed="#70E75043"
+        app:fab_colorRipple="#80FFFFFF"
+        app:fab_size="mini" />
+
+
+    <com.github.clans.fab.FloatingActionButton
+        android:id="@+id/fab_button_no"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="right|bottom"
+        android:layout_marginRight="60dp"
+        android:layout_marginBottom="46dp"
+        android:src="@drawable/ic_no"
+        app:fab_colorNormal="#30FF5449"
+        app:fab_colorPressed="#70E75043"
+        app:fab_colorRipple="#80FFFFFF"
+        app:fab_size="mini" />
 
 </FrameLayout>

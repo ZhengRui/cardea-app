@@ -41,7 +41,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class SettingActivity extends PreferenceActivity implements sendPrefListener{
+public class SettingActivity extends PreferenceActivity implements AsyncTaskListener{
     private static final String TAG = "SettingActivity";
     public static final int REQUEST_UPLOAD_MY = 100;
     public static final int REQUEST_UPLOAD_HIS = 200;
@@ -206,9 +206,9 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
     private class socketCreationTask extends AsyncTask<Void, Void, Boolean> {
         String desAddress;
         int dstPort;
-        private sendPrefListener listener;
+        private AsyncTaskListener listener;
 
-        socketCreationTask(String addr, int port, sendPrefListener listener) {
+        socketCreationTask(String addr, int port, AsyncTaskListener listener) {
             this.desAddress = addr;
             this.dstPort = port;
             this.listener = listener;
@@ -545,8 +545,4 @@ public class SettingActivity extends PreferenceActivity implements sendPrefListe
         }
     }
 
-}
-
-interface sendPrefListener {
-    void onTaskCompleted(boolean result);
 }
