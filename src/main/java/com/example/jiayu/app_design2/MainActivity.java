@@ -3,11 +3,14 @@ package com.example.jiayu.app_design2;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.hardware.Camera;
 import android.hardware.SensorManager;
 import android.location.Location;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
@@ -18,8 +21,11 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.Toast;
 
+import com.google.android.gms.appindexing.Action;
+import com.google.android.gms.appindexing.AppIndex;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
@@ -47,7 +53,7 @@ import java.util.Arrays;
 
 import cn.pedant.SweetAlert.SweetAlertDialog;
 
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements AsyncTaskListener {
     private static final String TAG = "MainActivity";
     private static final int REQUEST_TAKE_PHOTO = 100;
     private static final int REQUEST_SETTINGS = 200;
@@ -68,6 +74,9 @@ public class MainActivity extends Activity {
     private FloatingActionButton mFabBtnSettings;
     private SwitchButton camSwitchBtn;
     private SwitchButton modeSwitchBtn;
+    private ImageView mImageView;
+    private FloatingActionButton mFabBtnYes;
+    private FloatingActionButton mFabBtnNo;
 
     public static FaceDetector fdetector;
     public static int batchSize = 10;
@@ -102,6 +111,12 @@ public class MainActivity extends Activity {
         System.loadLibrary("caffe_jni");
     }
 
+    /**
+     * ATTENTION: This was auto-generated to implement the App Indexing API.
+     * See https://g.co/AppIndexing/AndroidStudio for more information.
+     */
+    private GoogleApiClient mClient;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -134,7 +149,7 @@ public class MainActivity extends Activity {
         });
 
 
-        mSurfaceView = (SurfaceView)findViewById(R.id.surfaceView);
+        mSurfaceView = (SurfaceView) findViewById(R.id.surfaceView);
         mHolder = mSurfaceView.getHolder();
         mHolder.addCallback(surfaceCallback);
 
@@ -156,11 +171,38 @@ public class MainActivity extends Activity {
 
         });
 
+        mImageView = (ImageView) findViewById(R.id.imageView);
+        mImageView.setVisibility(View.INVISIBLE);
+
+        mFabBtnYes = (FloatingActionButton) findViewById(R.id.fab_button_yes);
+        mFabBtnYes.setVisibility(View.GONE);
+        mFabBtnYes.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mImageView.setVisibility(View.INVISIBLE);
+                mFabBtnYes.setVisibility(View.GONE);
+                mFabBtnNo.setVisibility(View.GONE);
+                startPreview();
+            }
+        });
+
+        mFabBtnNo = (FloatingActionButton) findViewById(R.id.fab_button_no);
+        mFabBtnNo.setVisibility(View.GONE);
+        mFabBtnNo.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mImageView.setVisibility(View.INVISIBLE);
+                mFabBtnYes.setVisibility(View.GONE);
+                mFabBtnNo.setVisibility(View.GONE);
+                startPreview();
+            }
+        });
+
         mOrientationListener = new OrientationEventListener(this,
                 SensorManager.SENSOR_DELAY_NORMAL) {
             @Override
             public void onOrientationChanged(int orientation) {
-                if ((orientation >= 0 && orientation <= 30 ) || (orientation >= 330 && orientation <= 360)) {
+                if ((orientation >= 0 && orientation <= 30) || (orientation >= 330 && orientation <= 360)) {
                     orientCase = 0;
                 } else if (orientation >= 60 && orientation <= 120) {
                     orientCase = 1;
@@ -168,7 +210,8 @@ public class MainActivity extends Activity {
                     orientCase = 2;
                 } else if (orientation >= 240 && orientation <= 300) {
                     orientCase = 3;
-                } else {}
+                } else {
+                }
 //                Log.i(TAG, "Orientation changed to " + orientation +
 //                        ", case " + orientCase);
             }
@@ -187,10 +230,15 @@ public class MainActivity extends Activity {
 
         buildGoogleApiClient();
 
+        // ATTENTION: This was auto-generated to implement the App Indexing API.
+        // See https://g.co/AppIndexing/AndroidStudio for more information.
+        mClient = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
     }
 
 
-    /** Builds a GoogleApiClient to request the LocationServices API. */
+    /**
+     * Builds a GoogleApiClient to request the LocationServices API.
+     */
     protected synchronized void buildGoogleApiClient() {
         Log.i(TAG, "Building GoogleApiClient");
         mGoogleApiClient = new GoogleApiClient.Builder(this)
@@ -233,27 +281,31 @@ public class MainActivity extends Activity {
     };
 
 
-    /** called when take button is pressed, and triggers a new socket asyncTask */
+    /**
+     * called when take button is pressed, and triggers a new socket asyncTask
+     */
     private Camera.PictureCallback mJpegCallback = new Camera.PictureCallback() {
         public void onPictureTaken(byte[] data, Camera camera) {
             Log.i(TAG, Integer.toString(data.length));
 
-            new socketCreationTask("10.89.28.149", 9999).execute(data); //10.89.28.149
+            new socketCreationTask("10.89.28.149", 9999, MainActivity.this).execute(data); //10.89.28.149
 
         }
     };
 
-    private class socketCreationTask extends AsyncTask<byte[], Void, Void> {
+    private class socketCreationTask extends AsyncTask<byte[], Void, Boolean> {
         String desAddress;
         int dstPort;
+        AsyncTaskListener listener;
 
-        socketCreationTask(String addr, int port) {
+        socketCreationTask(String addr, int port, AsyncTaskListener listener) {
             this.desAddress = addr;
             this.dstPort = port;
+            this.listener = listener;
         }
 
         @Override
-        protected Void doInBackground(byte[]... data) {
+        protected Boolean doInBackground(byte[]... data) {
             try {
                 mSocket = new Socket(desAddress, dstPort);
                 Log.i(TAG, "Socket established");
@@ -264,13 +316,19 @@ public class MainActivity extends Activity {
 
             } catch (IOException e) {
                 e.printStackTrace();
+                return false;
             }
-            return null;
+            return true;
+        }
+
+        @Override
+        protected void onPostExecute(Boolean success) {
+            listener.onTaskCompleted(success);
         }
     }
 
     private void sendFrm(byte[] frmdata) {
-        if (mOutputStream != null ) {   // oStream maybe set to null by previous failed asynctask
+        if (mOutputStream != null) {   // oStream maybe set to null by previous failed asynctask
             Log.i(TAG, "mOutputStream is not null, and sendFrm() is running...");
             try {
                 frmdata = fdetector.droidJPEGCalibrate(frmdata, front1back0, orientCase);
@@ -279,6 +337,7 @@ public class MainActivity extends Activity {
                 int dataSize = frmdata.length;
                 byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, imgSize.width, imgSize.height, dataSize, mode, 0});
                 byte[] headerGeo = doubleToByte(new double[] {latitude, longitude});
+
                 int headerSize = headerMisc.length + headerGeo.length;
                 byte[] packetContent = new byte[headerSize + dataSize];
 
@@ -396,8 +455,19 @@ public class MainActivity extends Activity {
 
     }
 
+    private void display() {
+        mImageView.setVisibility(View.VISIBLE);
+        mFabBtnYes.setVisibility(View.VISIBLE);
+        mFabBtnNo.setVisibility(View.VISIBLE);
 
-    /** bind th camera with surface view. Initialize preview and start preview. **/
+        Bitmap bitmap = BitmapFactory.decodeFile(DATA_PATH + "test.png");
+        mImageView.setImageBitmap(bitmap);
+    }
+
+
+    /**
+     * bind th camera with surface view. Initialize preview and start preview.
+     **/
     private SurfaceHolder.Callback surfaceCallback = new SurfaceHolder.Callback() {
         @Override
         public void surfaceCreated(SurfaceHolder holder) {
@@ -472,7 +542,9 @@ public class MainActivity extends Activity {
     }
 
 
-    /** Load files and prepare for caffe tasks **/
+    /**
+     * Load files and prepare for caffe tasks
+     **/
     private class initializeTask extends AsyncTask<Void, Void, Boolean> {
 
         @Override
@@ -550,13 +622,13 @@ public class MainActivity extends Activity {
     }
 
     private byte[] intToByte(int[] input) {
-        byte[] output = new byte[input.length*4];
+        byte[] output = new byte[input.length * 4];
 
-        for(int i = 0; i < input.length; i++) {
-            output[i*4] = (byte)(input[i] & 0xFF);
-            output[i*4 + 1] = (byte)((input[i] & 0xFF00) >>> 8);
-            output[i*4 + 2] = (byte)((input[i] & 0xFF0000) >>> 16);
-            output[i*4 + 3] = (byte)((input[i] & 0xFF000000) >>> 24);
+        for (int i = 0; i < input.length; i++) {
+            output[i * 4] = (byte) (input[i] & 0xFF);
+            output[i * 4 + 1] = (byte) ((input[i] & 0xFF00) >>> 8);
+            output[i * 4 + 2] = (byte) ((input[i] & 0xFF0000) >>> 16);
+            output[i * 4 + 3] = (byte) ((input[i] & 0xFF000000) >>> 24);
         }
 
         return output;
@@ -575,16 +647,39 @@ public class MainActivity extends Activity {
     }
 
     private byte[] doubleToByte(double[] input) {
-        byte[] output = new byte[input.length*8];
-        for (int i=0; i < input.length; i++)
-            ByteBuffer.wrap(output, 8*i, 8).order(ByteOrder.LITTLE_ENDIAN).putDouble(input[i]);
+        byte[] output = new byte[input.length * 8];
+        for (int i = 0; i < input.length; i++)
+            ByteBuffer.wrap(output, 8 * i, 8).order(ByteOrder.LITTLE_ENDIAN).putDouble(input[i]);
         return output;
+    }
+
+    @Override
+    public void onTaskCompleted(boolean result) {
+        if (result) {
+            display();
+        }
     }
 
     @Override
     protected void onStart() {
         super.onStart();
+        // ATTENTION: This was auto-generated to implement the App Indexing API.
+        // See https://g.co/AppIndexing/AndroidStudio for more information.
+        mClient.connect();
         mGoogleApiClient.connect();
+        // ATTENTION: This was auto-generated to implement the App Indexing API.
+        // See https://g.co/AppIndexing/AndroidStudio for more information.
+        Action viewAction = Action.newAction(
+                Action.TYPE_VIEW, // TODO: choose an action type.
+                "Main Page", // TODO: Define a title for the content shown.
+                // TODO: If you have web page content that matches this app activity's content,
+                // make sure this auto-generated web page URL is correct.
+                // Otherwise, set the URL to null.
+                Uri.parse("http://host/path"),
+                // TODO: Make sure this auto-generated app deep link URI is correct.
+                Uri.parse("android-app://com.example.jiayu.app_design2/http/host/path")
+        );
+        AppIndex.AppIndexApi.start(mClient, viewAction);
     }
 
     @Override
@@ -616,6 +711,22 @@ public class MainActivity extends Activity {
             mGoogleApiClient.disconnect();
         }
         super.onStop();
+        // ATTENTION: This was auto-generated to implement the App Indexing API.
+        // See https://g.co/AppIndexing/AndroidStudio for more information.
+        Action viewAction = Action.newAction(
+                Action.TYPE_VIEW, // TODO: choose an action type.
+                "Main Page", // TODO: Define a title for the content shown.
+                // TODO: If you have web page content that matches this app activity's content,
+                // make sure this auto-generated web page URL is correct.
+                // Otherwise, set the URL to null.
+                Uri.parse("http://host/path"),
+                // TODO: Make sure this auto-generated app deep link URI is correct.
+                Uri.parse("android-app://com.example.jiayu.app_design2/http/host/path")
+        );
+        AppIndex.AppIndexApi.end(mClient, viewAction);
+        // ATTENTION: This was auto-generated to implement the App Indexing API.
+        // See https://g.co/AppIndexing/AndroidStudio for more information.
+        mClient.disconnect();
     }
 
     @Override
