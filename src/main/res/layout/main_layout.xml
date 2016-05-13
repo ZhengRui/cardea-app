@@ -64,8 +64,8 @@
         app:kswThumbHeight="22dp"
         app:kswThumbMargin="4dp"
         app:kswTintColor="#30FF5449"
-        app:kswTextOff="W"
-        app:kswTextOn="S"
+        app:kswTextOff="S"
+        app:kswTextOn="W"
         android:layout_gravity="right|top" />
 
     <com.kyleduo.switchbutton.SwitchButton

@@ -39,6 +39,7 @@ import com.kyleduo.switchbutton.SwitchButton;
 import com.rzheng.fdlib.FaceDetector;
 import com.sh1r0.caffe_android_lib.CaffeMobile;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -91,7 +92,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
 
     private int orientCase;
     private int msgtype = 0;
-    private int mode = 0; // 0 weak mode 1 strong mode
+    private static int mode = 0; // 0 weak mode 1 strong mode
 
     private static final String DATA_PATH = Environment.getExternalStorageDirectory().toString() + "/ContextPrivacy/";
     private String landmarksFilePath = DATA_PATH + "shape_predictor_68_face_landmarks.dat";
@@ -162,6 +163,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         });
 
         modeSwitchBtn = (SwitchButton) findViewById(R.id.modeswitch);
+        modeSwitchBtn.setChecked(mode == 0 ? true : false);
         modeSwitchBtn.setOnClickListener(new Button.OnClickListener() {
             public void onClick(View v) {
                 switchMode();
@@ -303,12 +305,63 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         @Override
         protected Boolean doInBackground(byte[]... data) {
             try {
+
+                mResultFrm = fdetector.droidJPEGCalibrate(data[0], front1back0, orientCase);
+                byte[] jpeg2sent = mResultFrm;
+
+                float[][] feats; // m x 256
+                int[] faceposs; // length: m x 4
+                int extraSize = 0;
+                byte[] facebbxs = null;
+                byte[] facefeats = null;
+                if (mode == 1) {
+                    fdetector.clearCache();
+                    jpeg2sent = fdetector.detectAndBlurJPEG(jpeg2sent);
+                    faceposs = fdetector.getBbxPositions();
+                    feats = caffeFace.extractFeaturesCVBatch(fdetector.getAlignedFacesAddr(), "eltwise_fc1");
+                    Log.i(TAG, "faces positions: " + Arrays.toString(faceposs) + ", faces number: " + feats.length);
+                    facebbxs = intToByte(faceposs);
+                    ByteArrayOutputStream facefeatsStream = new ByteArrayOutputStream();
+                    for (float[] array : feats) {
+                        try {
+                            facefeatsStream.write(floatToByte(array));
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    facefeats = facefeatsStream.toByteArray();
+                    extraSize = facebbxs.length + facefeats.length;
+                }
+
+                // header: 8 integers 2 doubles，6th integer is frame size, 8th integer is face positions and features total size
+                // be careful of big_endian(python side) and little endian(c++ server side)
+                int dataSize = jpeg2sent.length;
+                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, imgSize.width, imgSize.height, dataSize, mode, extraSize});
+                byte[] headerGeo = doubleToByte(new double[] {latitude, longitude});
+
+                int headerSize = headerMisc.length + headerGeo.length;
+                byte[] packetContent = new byte[headerSize + dataSize + extraSize];
+
+                System.arraycopy(headerMisc, 0, packetContent, 0, headerMisc.length);
+                System.arraycopy(headerGeo, 0, packetContent, headerMisc.length, headerGeo.length);
+                System.arraycopy(jpeg2sent, 0, packetContent, headerSize, dataSize);
+
+                if (mode == 1) {
+                    System.arraycopy(facebbxs, 0, packetContent, headerSize+dataSize, facebbxs.length);
+                    System.arraycopy(facefeats, 0, packetContent, headerSize+dataSize+facebbxs.length, facefeats.length);
+                }
+
+                Log.i(TAG, "lat, lon : " + latitude + ", " + longitude);
+
+                Log.i(TAG, "header length: " + headerSize + " data length: " + dataSize +
+                        " extra length: " + extraSize + " msg length: " + packetContent.length);
+
                 mSocket = new Socket(desAddress, dstPort);
                 Log.i(TAG, "Socket established");
                 mOutputStream = mSocket.getOutputStream();
                 mInputStream = mSocket.getInputStream();
 
-                sendFrm(data[0]);
+                sendFrm(packetContent);
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -323,32 +376,12 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         }
     }
 
-    private void sendFrm(byte[] frmdata) {
+    private void sendFrm(byte[] packetContent) {
         if (mOutputStream != null) {   // oStream maybe set to null by previous failed asynctask
             Log.i(TAG, "mOutputStream is not null, and sendFrm() is running...");
             try {
-                frmdata = fdetector.droidJPEGCalibrate(frmdata, front1back0, orientCase);
-                mResultFrm = frmdata;
-
-                // header: 6+2个整数 2 个double，最后一个整数存的就是后面frame size
-                // be careful of big_endian(python side) and little endian(c++ server side)
-                int dataSize = frmdata.length;
-                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, imgSize.width, imgSize.height, dataSize, mode, 0});
-                byte[] headerGeo = doubleToByte(new double[] {latitude, longitude});
-
-                int headerSize = headerMisc.length + headerGeo.length;
-                byte[] packetContent = new byte[headerSize + dataSize];
-
-                System.arraycopy(headerMisc, 0, packetContent, 0, headerMisc.length);
-                System.arraycopy(headerGeo, 0, packetContent, headerMisc.length, headerGeo.length);
-                System.arraycopy(frmdata, 0, packetContent, headerSize, dataSize);
-                Log.i(TAG, "lat, lon : " + latitude + ", " + longitude);
-
-                Log.i(TAG, "header length: " + headerSize + " data length: " + dataSize +
-                        " msg length: " + packetContent.length);
 
                 long startTime = SystemClock.uptimeMillis();
-
                 Log.i(TAG, "start sending...");
                 mOutputStream.write(packetContent);
                 mOutputStream.flush();
@@ -430,7 +463,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
 
                 // pass to jni for image processing
                 if (bbxnum > 0)
-                    mResultFrm = fdetector.boxesProcess(frmdata, bbxposArr, bbxtxtArr, bbxprocArr, bbxproctypeArr);
+                    mResultFrm = fdetector.boxesProcess(mResultFrm, bbxposArr, bbxtxtArr, bbxprocArr, bbxproctypeArr);
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -657,6 +690,13 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         byte[] output = new byte[input.length * 8];
         for (int i = 0; i < input.length; i++)
             ByteBuffer.wrap(output, 8 * i, 8).order(ByteOrder.LITTLE_ENDIAN).putDouble(input[i]);
+        return output;
+    }
+
+    private byte[] floatToByte(float[] input) {
+        byte[] output = new byte[input.length*4];
+        for (int i=0; i < input.length; i++)
+            ByteBuffer.wrap(output, 4 * i, 4).order(ByteOrder.LITTLE_ENDIAN).putFloat(input[i]);
         return output;
     }
 
