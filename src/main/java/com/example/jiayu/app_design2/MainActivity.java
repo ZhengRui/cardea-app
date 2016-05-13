@@ -107,6 +107,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
     private GoogleApiClient mGoogleApiClient;
     protected Location mLastLocation;
     private double latitude, longitude;
+    private int xmax, ymax;
 
     static {
         System.loadLibrary("facedet");
@@ -306,6 +307,9 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         protected Boolean doInBackground(byte[]... data) {
             try {
 
+                xmax = (orientCase == 0 || orientCase == 2) ? imgSize.height : imgSize.width;
+                ymax = (orientCase == 0 || orientCase == 2) ? imgSize.width : imgSize.height;
+
                 mResultFrm = fdetector.droidJPEGCalibrate(data[0], front1back0, orientCase);
                 byte[] jpeg2sent = mResultFrm;
 
@@ -408,6 +412,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                 int[] bbxproctypeArr = new int[bbxnum];
 
                 int ibbx = 0;
+
                 // parse face result
                 for (int i = 0; i < resSizes[0]; i += 60) {
                     int[] bbxpos = byteToInt(Arrays.copyOfRange(dataRES, i, i+16));
@@ -424,6 +429,11 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                         // based on scene, make final decision of
                         // facecase c5(blur) or c6(don't blur)
                     }
+
+                    bbxpos[0] = Math.max(bbxpos[0], 0);
+                    bbxpos[1] = Math.max(bbxpos[1], 0);
+                    bbxpos[2] = Math.min(bbxpos[2], xmax);
+                    bbxpos[3] = Math.min(bbxpos[3], ymax);
 
                     bbxposArr[ibbx] = bbxpos;
                     bbxtxtArr[ibbx] = username + " " + facecase;
@@ -453,6 +463,11 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                     float scr = ByteBuffer.wrap(Arrays.copyOfRange(dataRES, i+20, i+24)).order(ByteOrder.LITTLE_ENDIAN).getFloat();
                     Log.i(TAG, "hand bbx: " + Arrays.toString(bbxpos) + ", class: "
                             + bbxcls + ", score: " + scr);
+
+                    bbxpos[0] = Math.max(bbxpos[0], 0);
+                    bbxpos[1] = Math.max(bbxpos[1], 0);
+                    bbxpos[2] = Math.min(bbxpos[2], xmax);
+                    bbxpos[3] = Math.min(bbxpos[3], ymax);
 
                     bbxposArr[ibbx] = bbxpos;
                     bbxtxtArr[ibbx] = (bbxcls == 2 ? "yes" : (bbxcls == 3 ? "no" : "normal")) + " " + scr;
@@ -546,11 +561,13 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                 params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
 
                 imgSize = params.getPictureSize();
+                Camera.Size targetSize = mCamera.new Size(0, 0);
                 for (Camera.Size s : params.getSupportedPictureSizes()) {
 //                    Log.i(TAG, "Supported image size: " + s.width + ", " + s.height);
-                    if (s.width > imgSize.width && s.width < 2000)
-                        imgSize = s;
+                    if (s.width > targetSize.width && s.width < 2000)
+                        targetSize = s;
                 }
+                imgSize = targetSize;
                 params.setPictureFormat(PixelFormat.JPEG);
                 params.setJpegQuality(100);
                 params.setPictureSize(imgSize.width, imgSize.height);
