@@ -3,6 +3,7 @@ package com.example.jiayu.app_design2;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -38,6 +39,7 @@ import com.github.clans.fab.FloatingActionButton;
 import com.kyleduo.switchbutton.SwitchButton;
 import com.rzheng.fdlib.FaceDetector;
 import com.sh1r0.caffe_android_lib.CaffeMobile;
+import com.sh1r0.caffe_android_lib.PredictScore;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -52,15 +54,20 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Scanner;
 
 import cn.pedant.SweetAlert.SweetAlertDialog;
 
 public class MainActivity extends Activity implements AsyncTaskListener {
     private static final String TAG = "MainActivity";
-    private static final int REQUEST_TAKE_PHOTO = 100;
-    private static final int REQUEST_SETTINGS = 200;
-    private static final int REQUEST_SHOW_SETTINGS = 300;
-    public static final int MEDIA_TYPE_IMAGE = 1;
+    private static final int REQUEST_SETTINGS = 100;
     private static final String KEY_CAMERA = "frontOrBack";
 
     private SurfaceView mSurfaceView;
@@ -71,6 +78,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
     private Camera.Size size;
     private Camera.Size imgSize;
     private static int front1back0 = 0;
+    private int xmax, ymax;
 
     private FloatingActionButton mFabBtnTake;
     private FloatingActionButton mFabBtnSettings;
@@ -84,6 +92,14 @@ public class MainActivity extends Activity implements AsyncTaskListener {
     public static int batchSize = 10;
     public static CaffeMobile caffeFace;
     private static CaffeMobile caffeScene;
+    private PredictScore[] mScene;
+    private static final int SCENE_NUM = 59;
+    private String[] SCENE_CLASSES;
+    private Map<String, int[]> grpMap;
+    private List<String> grpName;
+    private Map<Integer, String> catToGrpMap;
+    private Map<String, Float> grpScores;
+    private List<Integer> mSceneGrp;
 
     private Socket mSocket;
     private OutputStream mOutputStream;
@@ -107,15 +123,14 @@ public class MainActivity extends Activity implements AsyncTaskListener {
     private GoogleApiClient mGoogleApiClient;
     protected Location mLastLocation;
     private double latitude, longitude;
-    private int xmax, ymax;
+
+    private static boolean sceneTaskFinished = false;
 
     static {
         System.loadLibrary("facedet");
         System.loadLibrary("caffe");
         System.loadLibrary("caffe_jni");
     }
-
-
 
 
     @Override
@@ -155,7 +170,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
 
 
         camSwitchBtn = (SwitchButton) findViewById(R.id.camswitch);
-        camSwitchBtn.setChecked(front1back0 == 0 ? true : false);
+        camSwitchBtn.setChecked(front1back0 == 0);
         camSwitchBtn.setOnClickListener(new Button.OnClickListener() {
             public void onClick(View v) {
                 switchCam();
@@ -164,7 +179,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         });
 
         modeSwitchBtn = (SwitchButton) findViewById(R.id.modeswitch);
-        modeSwitchBtn.setChecked(mode == 0 ? true : false);
+        modeSwitchBtn.setChecked(mode == 0);
         modeSwitchBtn.setOnClickListener(new Button.OnClickListener() {
             public void onClick(View v) {
                 switchMode();
@@ -236,51 +251,6 @@ public class MainActivity extends Activity implements AsyncTaskListener {
 
 
     /**
-     * Builds a GoogleApiClient to request the LocationServices API.
-     */
-    protected synchronized void buildGoogleApiClient() {
-        Log.i(TAG, "Building GoogleApiClient");
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addConnectionCallbacks(mConnectionCallback)
-                .addOnConnectionFailedListener(new OnConnectionFailedListener() {
-                    @Override
-                    public void onConnectionFailed(ConnectionResult connectionResult) {
-                        Log.i(TAG, "Connection failed: ConnectionResult.getErrorCode() = "
-                                + connectionResult.getErrorCode());
-                    }
-                })
-                .addApi(LocationServices.API)
-                .build();
-    }
-
-    private ConnectionCallbacks mConnectionCallback = new ConnectionCallbacks() {
-
-        @Override
-        public void onConnected(Bundle bundle) {
-            Log.i(TAG, "Connected to GoogleApiClient");
-
-            try {
-                mLastLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
-                if (mLastLocation != null) {
-                    Log.i(TAG, "successfully get last location...");
-                    latitude = mLastLocation.getLatitude();
-                    longitude = mLastLocation.getLongitude();
-                    Log.i(TAG, "Latitude: " + String.valueOf(latitude) + ", longitude: " + String.valueOf(longitude));
-                }
-            } catch (SecurityException e) {
-                e.printStackTrace();
-            }
-        }
-
-        @Override
-        public void onConnectionSuspended(int i) {
-            Log.i(TAG, "Connection suspended");
-            mGoogleApiClient.connect();
-        }
-    };
-
-
-    /**
      * called when take button is pressed, and triggers a new socket asyncTask
      */
     private Camera.PictureCallback mJpegCallback = new Camera.PictureCallback() {
@@ -288,6 +258,8 @@ public class MainActivity extends Activity implements AsyncTaskListener {
             Log.i(TAG, Integer.toString(data.length));
 
             new socketCreationTask("10.89.28.149", 9999, MainActivity.this).execute(data); //10.89.28.149
+
+            new sceneTask().execute(data);
 
         }
     };
@@ -318,7 +290,8 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                 int extraSize = 0;
                 byte[] facebbxs = null;
                 byte[] facefeats = null;
-                if (mode == 1) {
+
+                if (mode == 1) { // strong mode
                     fdetector.clearCache();
                     jpeg2sent = fdetector.detectAndBlurJPEG(jpeg2sent);
                     faceposs = fdetector.getBbxPositions();
@@ -350,7 +323,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                 System.arraycopy(headerGeo, 0, packetContent, headerMisc.length, headerGeo.length);
                 System.arraycopy(jpeg2sent, 0, packetContent, headerSize, dataSize);
 
-                if (mode == 1) {
+                if (mode == 1) { // strong mode
                     System.arraycopy(facebbxs, 0, packetContent, headerSize+dataSize, facebbxs.length);
                     System.arraycopy(facefeats, 0, packetContent, headerSize+dataSize+facebbxs.length, facefeats.length);
                 }
@@ -394,91 +367,9 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                 long endTime = SystemClock.uptimeMillis();
                 Log.i(TAG, String.format("time of sending the frame: %d ms", endTime - startTime));
 
-                byte[] headerRES = new byte[8];
-                int resHeaderSize = mInputStream.read(headerRES);
-                assert(resHeaderSize == 8);
-                int[] resSizes = byteToInt(headerRES);
-                Log.i(TAG, Arrays.toString(resSizes));
-                int resSizeTot = resSizes[0] + resSizes[1];
-                byte[] dataRES = new byte[resSizeTot];
-                int resDataSize = mInputStream.read(dataRES);
-                assert(resDataSize == resSizeTot);
-                Log.i(TAG, "total result data length: " + dataRES.length);
 
-                int bbxnum = resSizes[0] / 60 + resSizes[1] / 24;
-                int[][] bbxposArr = new int[bbxnum][4];
-                String[] bbxtxtArr = new String[bbxnum];
-                boolean[] bbxprocArr = new boolean[bbxnum];
-                int[] bbxproctypeArr = new int[bbxnum];
-
-                int ibbx = 0;
-
-                // parse face result
-                for (int i = 0; i < resSizes[0]; i += 60) {
-                    int[] bbxpos = byteToInt(Arrays.copyOfRange(dataRES, i, i+16));
-                    String username = new String(Arrays.copyOfRange(dataRES, i+16, i+44)).trim();
-                    String facecase = new String(Arrays.copyOfRange(dataRES, i+44, i+46));
-                    int policy = byteToInt(Arrays.copyOfRange(dataRES, i+56, i+60))[0];
-                    Log.i(TAG, "face bbx: " + Arrays.toString(bbxpos) + ", username: " + username +
-                            ", facecase: " + facecase + ", policy: " + policy);
-
-                    if (facecase.equals("c5")) {  // need scene results for decision
-                        String scenes = new String(Arrays.copyOfRange(dataRES, i + 46, i + 56));
-                        Log.i(TAG, "scenes: " + scenes);
-
-                        // based on scene, make final decision of
-                        // facecase c5(blur) or c6(don't blur)
-                    }
-
-                    bbxpos[0] = Math.max(bbxpos[0], 0);
-                    bbxpos[1] = Math.max(bbxpos[1], 0);
-                    bbxpos[2] = Math.min(bbxpos[2], xmax);
-                    bbxpos[3] = Math.min(bbxpos[3], ymax);
-
-                    bbxposArr[ibbx] = bbxpos;
-                    bbxtxtArr[ibbx] = username + " " + facecase;
-
-                    // c0: not registered user
-                    // c1: no gesture
-                    // c2: yes gesture
-                    // c3: out of distance
-                    // c4: other feature matched
-                    // c5: scene matched
-                    // c6: pass all
-
-                    if (facecase.equals("c0") || facecase.equals("c2") ||
-                            facecase.equals("c3") || facecase.equals("c6"))
-                        bbxprocArr[ibbx] = false;
-                    else
-                        bbxprocArr[ibbx] = true;
-
-                    bbxproctypeArr[ibbx] = policy;
-                    ibbx += 1;
-                }
-
-                // parse hand result
-                for (int i = resSizes[0]; i < resDataSize; i += 24) {
-                    int[] bbxpos = byteToInt(Arrays.copyOfRange(dataRES, i, i+16));
-                    int bbxcls = byteToInt(Arrays.copyOfRange(dataRES, i+16, i+20))[0];
-                    float scr = ByteBuffer.wrap(Arrays.copyOfRange(dataRES, i+20, i+24)).order(ByteOrder.LITTLE_ENDIAN).getFloat();
-                    Log.i(TAG, "hand bbx: " + Arrays.toString(bbxpos) + ", class: "
-                            + bbxcls + ", score: " + scr);
-
-                    bbxpos[0] = Math.max(bbxpos[0], 0);
-                    bbxpos[1] = Math.max(bbxpos[1], 0);
-                    bbxpos[2] = Math.min(bbxpos[2], xmax);
-                    bbxpos[3] = Math.min(bbxpos[3], ymax);
-
-                    bbxposArr[ibbx] = bbxpos;
-                    bbxtxtArr[ibbx] = (bbxcls == 2 ? "yes" : (bbxcls == 3 ? "no" : "normal")) + " " + scr;
-                    bbxprocArr[ibbx] = false;
-                    bbxproctypeArr[ibbx] = 2;
-                    ibbx += 1;
-                }
-
-                // pass to jni for image processing
-                if (bbxnum > 0)
-                    mResultFrm = fdetector.boxesProcess(mResultFrm, bbxposArr, bbxtxtArr, bbxprocArr, bbxproctypeArr);
+                // start receiving data and processing
+                receiveFrm();
 
             } catch (IOException e) {
                 e.printStackTrace();
@@ -501,6 +392,126 @@ public class MainActivity extends Activity implements AsyncTaskListener {
 
     }
 
+    private void receiveFrm() {
+        try {
+            Log.i(TAG, "receiveFrm() is called...");
+            byte[] headerRES = new byte[8];
+            int resHeaderSize = 0;
+            resHeaderSize = mInputStream.read(headerRES);
+            assert(resHeaderSize == 8);
+
+            int[] resSizes = byteToInt(headerRES);
+            Log.i(TAG, Arrays.toString(resSizes));
+
+            int resSizeTot = resSizes[0] + resSizes[1];
+            byte[] dataRES = new byte[resSizeTot];
+            int resDataSize = 0;
+
+            resDataSize = mInputStream.read(dataRES);
+            assert(resDataSize == resSizeTot);
+            Log.i(TAG, "total result data length: " + dataRES.length);
+
+            int bbxnum = resSizes[0] / 60 + resSizes[1] / 24;
+            int[][] bbxposArr = new int[bbxnum][4];
+            String[] bbxtxtArr = new String[bbxnum];
+            boolean[] bbxprocArr = new boolean[bbxnum];
+            int[] bbxproctypeArr = new int[bbxnum];
+
+            int ibbx = 0;
+
+            // parse face result
+            for (int i = 0; i < resSizes[0]; i += 60) {
+                int[] bbxpos = byteToInt(Arrays.copyOfRange(dataRES, i, i+16));
+                String username = new String(Arrays.copyOfRange(dataRES, i+16, i+44)).trim();
+                String facecase = new String(Arrays.copyOfRange(dataRES, i+44, i+46));
+                int policy = byteToInt(Arrays.copyOfRange(dataRES, i+56, i+60))[0];
+                Log.i(TAG, "face bbx: " + Arrays.toString(bbxpos) + ", username: " + username +
+                        ", facecase: " + facecase + ", policy: " + policy);
+
+                if (facecase.equals("c5")) {  // need scene results for decision
+                    String scenes = new String(Arrays.copyOfRange(dataRES, i + 46, i + 56));
+                    Log.i(TAG, "scenes: " + scenes);
+
+                    // based on scene, make final decision of
+                    // facecase c6(blur) or c5(don't blur)
+
+                    while (sceneTaskFinished == false) { // wait for results from scene
+                        Log.i(TAG, "waiting for sceneTask");
+                        Thread.sleep(1000);
+
+                    }
+
+                    for (int j = 0; j < scenes.length(); j ++ ) {
+                        if (scenes.charAt(j) == '1' ) {
+                            if (mSceneGrp.contains(j)) {
+                                facecase = "c6";
+                                break;
+                            }
+                        }
+
+                    }
+
+                }
+
+                bbxpos[0] = Math.max(bbxpos[0], 0);
+                bbxpos[1] = Math.max(bbxpos[1], 0);
+                bbxpos[2] = Math.min(bbxpos[2], xmax);
+                bbxpos[3] = Math.min(bbxpos[3], ymax);
+
+                bbxposArr[ibbx] = bbxpos;
+                bbxtxtArr[ibbx] = username + " " + facecase;
+
+                // c0: not registered user
+                // c1: no gesture
+                // c2: yes gesture
+                // c3: out of distance
+                // c4: other feature matched
+                // c5: pass all
+                // c6: scene matched
+
+                if (facecase.equals("c0") || facecase.equals("c2") ||
+                        facecase.equals("c3") || facecase.equals("c5"))
+                    bbxprocArr[ibbx] = false;
+                else
+                    bbxprocArr[ibbx] = true;
+
+                bbxproctypeArr[ibbx] = policy;
+                ibbx += 1;
+            }
+
+            // parse hand result
+            for (int i = resSizes[0]; i < resDataSize; i += 24) {
+                int[] bbxpos = byteToInt(Arrays.copyOfRange(dataRES, i, i+16));
+                int bbxcls = byteToInt(Arrays.copyOfRange(dataRES, i+16, i+20))[0];
+                float scr = ByteBuffer.wrap(Arrays.copyOfRange(dataRES, i+20, i+24)).order(ByteOrder.LITTLE_ENDIAN).getFloat();
+                Log.i(TAG, "hand bbx: " + Arrays.toString(bbxpos) + ", class: "
+                        + bbxcls + ", score: " + scr);
+
+                bbxpos[0] = Math.max(bbxpos[0], 0);
+                bbxpos[1] = Math.max(bbxpos[1], 0);
+                bbxpos[2] = Math.min(bbxpos[2], xmax);
+                bbxpos[3] = Math.min(bbxpos[3], ymax);
+
+                bbxposArr[ibbx] = bbxpos;
+                bbxtxtArr[ibbx] = (bbxcls == 2 ? "yes" : (bbxcls == 3 ? "no" : "normal")) + " " + scr;
+                bbxprocArr[ibbx] = false;
+                bbxproctypeArr[ibbx] = 2;
+                ibbx += 1;
+            }
+
+            // pass to jni for image processing
+            if (bbxnum > 0)
+                mResultFrm = fdetector.boxesProcess(mResultFrm, bbxposArr, bbxtxtArr, bbxprocArr, bbxproctypeArr);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+
+    }
+
     private void display() {
         mImageView.setVisibility(View.VISIBLE);
         mFabBtnYes.setVisibility(View.VISIBLE);
@@ -517,6 +528,100 @@ public class MainActivity extends Activity implements AsyncTaskListener {
 
         bitmap = Bitmap.createBitmap(bitmap , 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
         mImageView.setImageBitmap(bitmap);
+    }
+
+
+    private class sceneTask extends AsyncTask<byte[], Void, Boolean> {
+
+        @Override
+        protected Boolean doInBackground(byte[]... frmdata) {
+            Log.i(TAG, "sceneTask is running...");
+            // predict scene with finetuned model
+            mScene = caffeScene.predictFrame(imgSize.width, imgSize.height, front1back0, orientCase, frmdata[0], SCENE_NUM, "com/sh1r0/caffe_android_lib/PredictScore");
+
+            getSceneGrp(mScene);
+
+            return true;
+        }
+
+        @Override
+        protected void onPostExecute(Boolean success) {
+            sceneTaskFinished = true;
+        }
+    }
+
+    private void getSceneGrp(PredictScore[] scene) {
+
+        // map from categories to group
+        grpMap = new HashMap<>();
+        grpMap.put("disease", new int[] {29, 30, 36});
+        grpMap.put("nudity", new int[] {4, 7, 31, 45, 48, 53, 54});
+        grpMap.put("work", new int[] {19, 20, 21, 33, 37, 38, 42});
+        grpMap.put("mobility", new int[] {0, 1, 10, 11, 50, 57, 58});
+        grpMap.put("entertainment", new int[] {3, 25, 40});
+        grpMap.put("eating", new int[] {8, 9, 12, 18, 22, 23, 24, 26, 27, 43, 44, 52});
+        grpMap.put("shopping", new int[] {5, 6, 17, 28, 32, 46, 47, 51});
+        grpMap.put("religion", new int[] {13, 14, 15, 16, 34, 41, 55, 56});
+        grpMap.put("exhibition", new int[] {2, 35});
+        grpMap.put("public", new int[] {39, 49});
+
+        String[] tmpgrpName = new String[]{"disease", "eating", "entertainment", "exhibition",
+                        "transportation", "nudity", "public", "religion", "shopping", "work"};
+        grpName = Arrays.asList(tmpgrpName);
+
+        catToGrpMap = new HashMap<Integer, String>();
+        for (Map.Entry<String, int[]> eachGrp : grpMap.entrySet()) {
+            String grpName = eachGrp.getKey();
+            int[] grpMem = eachGrp.getValue();
+            for (int i: grpMem) {
+                catToGrpMap.put(i, grpName);
+            }
+        }
+
+        grpScores = new HashMap<String, Float>();
+        for (Map.Entry<String, int[]> eachGrp : grpMap.entrySet()) {
+            String grpName = eachGrp.getKey();
+            grpScores.put(grpName, (float) 0.);
+        }
+
+        for (PredictScore eachScene : scene) {
+            String grpName = catToGrpMap.get(eachScene.idx);
+            grpScores.put(grpName, grpScores.get(grpName) + eachScene.scr);
+        }
+
+        grpScores = sortByValue(grpScores);
+
+        mSceneGrp = new ArrayList<>();
+        for (Map.Entry<String, Float> eachGrpScr : grpScores.entrySet()) {
+            Log.i(TAG, String.format("%1$s    %2$.3f\n", eachGrpScr.getKey(), eachGrpScr.getValue()));
+            if (eachGrpScr.getValue() > 0.3) { // threshold is set to 0.3
+                mSceneGrp.add(grpName.indexOf(eachGrpScr.getKey()));
+            }
+        }
+
+/** scores for top k categories
+ *
+        AssetManager am = MainActivity.this.getAssets();
+        try {
+            InputStream is = am.open("subcategories.txt");
+            Scanner sc = new Scanner(is);
+            List<String> lines = new ArrayList<>();
+            while (sc.hasNextLine()) {
+                final String temp = sc.nextLine();
+                lines.add(temp.substring(0, temp.indexOf(" ")));
+            }
+
+            SCENE_CLASSES = lines.toArray(new String[0]);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        for (int i=0; i<Math.min(5, scene.length); i++) {
+            PredictScore eachScene = scene[i];
+            Log.i(TAG, String.format("%1$s    %2$.3f\n", SCENE_CLASSES[eachScene.idx], eachScene.scr));
+        }
+ */
     }
 
 
@@ -650,11 +755,57 @@ public class MainActivity extends Activity implements AsyncTaskListener {
             caffeFace.setNumThreads(2);
         }
 
-//        if (caffeScene == null) {
-//            caffeScene = new CaffeMobile(sceneProtoPath, sceneModelPath);
-//            caffeScene.setNumThreads(2);
-//        }
+        if (caffeScene == null) {
+            caffeScene = new CaffeMobile(sceneProtoPath, sceneModelPath);
+            caffeScene.setNumThreads(2);
+            caffeScene.setMean(new float[] {(float) 105.908874512, (float) 114.063842773, (float) 116.282836914});
+        }
     }
+
+
+    /**
+     * Builds a GoogleApiClient to request the LocationServices API.
+     */
+    protected synchronized void buildGoogleApiClient() {
+        Log.i(TAG, "Building GoogleApiClient");
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addConnectionCallbacks(mConnectionCallback)
+                .addOnConnectionFailedListener(new OnConnectionFailedListener() {
+                    @Override
+                    public void onConnectionFailed(ConnectionResult connectionResult) {
+                        Log.i(TAG, "Connection failed: ConnectionResult.getErrorCode() = "
+                                + connectionResult.getErrorCode());
+                    }
+                })
+                .addApi(LocationServices.API)
+                .build();
+    }
+
+    private ConnectionCallbacks mConnectionCallback = new ConnectionCallbacks() {
+
+        @Override
+        public void onConnected(Bundle bundle) {
+            Log.i(TAG, "Connected to GoogleApiClient");
+
+            try {
+                mLastLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
+                if (mLastLocation != null) {
+                    Log.i(TAG, "successfully get last location...");
+                    latitude = mLastLocation.getLatitude();
+                    longitude = mLastLocation.getLongitude();
+                    Log.i(TAG, "Latitude: " + String.valueOf(latitude) + ", longitude: " + String.valueOf(longitude));
+                }
+            } catch (SecurityException e) {
+                e.printStackTrace();
+            }
+        }
+
+        @Override
+        public void onConnectionSuspended(int i) {
+            Log.i(TAG, "Connection suspended");
+            mGoogleApiClient.connect();
+        }
+    };
 
 
     private void switchCam() {
@@ -715,6 +866,24 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         for (int i=0; i < input.length; i++)
             ByteBuffer.wrap(output, 4 * i, 4).order(ByteOrder.LITTLE_ENDIAN).putFloat(input[i]);
         return output;
+    }
+
+    public static <K, V extends Comparable<? super V>> Map<K, V> sortByValue( Map<K, V> map ) {
+        List<Map.Entry<K, V>> list =
+                new LinkedList<>( map.entrySet() );
+        Collections.sort(list, new Comparator<Map.Entry<K, V>>() {
+            @Override
+            public int compare(Map.Entry<K, V> o1, Map.Entry<K, V> o2) {
+                return (o2.getValue()).compareTo(o1.getValue());
+            }
+        });
+
+        Map<K, V> result = new LinkedHashMap<>();
+        for (Map.Entry<K, V> entry : list)
+        {
+            result.put( entry.getKey(), entry.getValue() );
+        }
+        return result;
     }
 
     @Override
@@ -781,11 +950,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         if (requestCode == REQUEST_SETTINGS && resultCode == RESULT_OK) {
             Log.i(TAG, "start REQUEST_SETTINGS activity");
 
-        } else if (requestCode == REQUEST_SHOW_SETTINGS && resultCode == RESULT_OK) {
-            Log.i(TAG, "start REQUEST_SHOW_SETTINGS activity");
-
         }
-
         super.onActivityResult(requestCode, resultCode, data);
     }
 
