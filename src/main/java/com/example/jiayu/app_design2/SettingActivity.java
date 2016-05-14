@@ -17,6 +17,7 @@ import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Toast;
 
 
 import org.json.JSONException;
@@ -29,6 +30,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.Socket;
@@ -222,13 +224,12 @@ public class SettingActivity extends PreferenceActivity implements AsyncTaskList
                 mOutputStream = mSocket.getOutputStream();
                 mInputStream = mSocket.getInputStream();
 
-                sendPreference();
+                return sendPreference();
 
             } catch (IOException e) {
                 e.printStackTrace();
                 return false;
             }
-            return true;
         }
 
         @Override
@@ -237,7 +238,8 @@ public class SettingActivity extends PreferenceActivity implements AsyncTaskList
         }
     }
 
-    private void sendPreference() {
+    private boolean sendPreference() {
+        boolean succeed = false;
         SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
 
         String usernameText = sp.getString("username_text", null);
@@ -329,8 +331,11 @@ public class SettingActivity extends PreferenceActivity implements AsyncTaskList
                 Log.i(TAG, "finish sending...");
 
 
-                //byte[] buffer = new byte[10];
-                //int read = mInputStream.read(buffer);
+                byte[] buffer = new byte[1];
+                int read = mInputStream.read(buffer);
+                assert(read == 1);
+                succeed = buffer[0] != 0;
+
             } catch (IOException e) {
                 e.printStackTrace();
                 if (mSocket != null) {
@@ -347,7 +352,7 @@ public class SettingActivity extends PreferenceActivity implements AsyncTaskList
             }
         } else {
         }
-
+        return succeed;
     }
 
 
@@ -537,11 +542,14 @@ public class SettingActivity extends PreferenceActivity implements AsyncTaskList
     public void onTaskCompleted(boolean result) {
         if (result) {// save sent features to SD card
             try {
+                Toast.makeText(SettingActivity.this, "Profile Updated", Toast.LENGTH_SHORT).show();
                 saveFeatureToSD(myFeatureFileName, myFeature);
                 saveFeatureToSD(hisFeatureFileName, hisFeature);
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        } else {
+            Toast.makeText(SettingActivity.this, "Failed", Toast.LENGTH_SHORT).show();
         }
     }
 

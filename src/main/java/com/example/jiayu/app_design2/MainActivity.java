@@ -1,5 +1,6 @@
 package com.example.jiayu.app_design2;
 
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -9,11 +10,13 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.PixelFormat;
+import android.graphics.Typeface;
 import android.hardware.Camera;
 import android.hardware.SensorManager;
 import android.location.Location;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.SystemClock;
@@ -24,11 +27,13 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.appindexing.Action;
 import com.google.android.gms.appindexing.AppIndex;
 import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.BooleanResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
 import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
@@ -85,6 +90,8 @@ public class MainActivity extends Activity implements AsyncTaskListener {
     private SwitchButton camSwitchBtn;
     private SwitchButton modeSwitchBtn;
     private ImageView mImageView;
+    private TextView csfGrpResView;
+    private String csfGrpTxt;
     private FloatingActionButton mFabBtnYes;
     private FloatingActionButton mFabBtnNo;
 
@@ -123,8 +130,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
     private GoogleApiClient mGoogleApiClient;
     protected Location mLastLocation;
     private double latitude, longitude;
-
-    private static boolean sceneTaskFinished = false;
+    private boolean sceneResUpdated = false;
 
     static {
         System.loadLibrary("facedet");
@@ -188,7 +194,11 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         });
 
         mImageView = (ImageView) findViewById(R.id.imageView);
+        mImageView.setBackgroundColor(Color.rgb(0,0,0));
         mImageView.setVisibility(View.INVISIBLE);
+
+        csfGrpResView = (TextView) findViewById(R.id.csfGrpRes);
+        csfGrpResView.setVisibility(View.GONE);
 
         mFabBtnYes = (FloatingActionButton) findViewById(R.id.fab_button_yes);
         mFabBtnYes.setVisibility(View.GONE);
@@ -196,6 +206,8 @@ public class MainActivity extends Activity implements AsyncTaskListener {
             @Override
             public void onClick(View v) {
                 mImageView.setVisibility(View.INVISIBLE);
+                csfGrpResView.setVisibility(View.INVISIBLE);
+                csfGrpTxt = "";
                 mFabBtnYes.setVisibility(View.GONE);
                 mFabBtnNo.setVisibility(View.GONE);
 
@@ -209,6 +221,8 @@ public class MainActivity extends Activity implements AsyncTaskListener {
             @Override
             public void onClick(View v) {
                 mImageView.setVisibility(View.INVISIBLE);
+                csfGrpResView.setVisibility(View.INVISIBLE);
+                csfGrpTxt = "";
                 mFabBtnYes.setVisibility(View.GONE);
                 mFabBtnNo.setVisibility(View.GONE);
 
@@ -255,11 +269,73 @@ public class MainActivity extends Activity implements AsyncTaskListener {
      */
     private Camera.PictureCallback mJpegCallback = new Camera.PictureCallback() {
         public void onPictureTaken(byte[] data, Camera camera) {
+            // prepare package content and pass package content and data (for scene classification)
+            // to asynctask
+
+
             Log.i(TAG, Integer.toString(data.length));
+            xmax = (orientCase == 0 || orientCase == 2) ? imgSize.height : imgSize.width;
+            ymax = (orientCase == 0 || orientCase == 2) ? imgSize.width : imgSize.height;
 
-            new socketCreationTask("10.89.28.149", 9999, MainActivity.this).execute(data); //10.89.28.149
+            mResultFrm = fdetector.droidJPEGCalibrate(data, front1back0, orientCase);
+            byte[] jpeg2sent = mResultFrm;
 
-            new sceneTask().execute(data);
+            float[][] feats; // m x 256
+            int[] faceposs; // length: m x 4
+            int extraSize = 0;
+            byte[] facebbxs = null;
+            byte[] facefeats = null;
+
+            if (mode == 1) { // strong mode
+                fdetector.clearCache();
+                jpeg2sent = fdetector.detectAndBlurJPEG(jpeg2sent);
+                faceposs = fdetector.getBbxPositions();
+                feats = caffeFace.extractFeaturesCVBatch(fdetector.getAlignedFacesAddr(), "eltwise_fc1");
+                Log.i(TAG, "faces positions: " + Arrays.toString(faceposs) + ", faces number: " + feats.length);
+                facebbxs = intToByte(faceposs);
+                ByteArrayOutputStream facefeatsStream = new ByteArrayOutputStream();
+                for (float[] array : feats) {
+                    try {
+                        facefeatsStream.write(floatToByte(array));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+                facefeats = facefeatsStream.toByteArray();
+                extraSize = facebbxs.length + facefeats.length;
+            }
+
+            // header: 8 integers 2 doubles，6th integer is frame size, 8th integer is face positions and features total size
+            // be careful of big_endian(python side) and little endian(c++ server side)
+            int dataSize = jpeg2sent.length;
+            byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, imgSize.width, imgSize.height, dataSize, mode, extraSize});
+            byte[] headerGeo = doubleToByte(new double[] {latitude, longitude});
+
+            int headerSize = headerMisc.length + headerGeo.length;
+            byte[] packetContent = new byte[headerSize + dataSize + extraSize];
+
+            System.arraycopy(headerMisc, 0, packetContent, 0, headerMisc.length);
+            System.arraycopy(headerGeo, 0, packetContent, headerMisc.length, headerGeo.length);
+            System.arraycopy(jpeg2sent, 0, packetContent, headerSize, dataSize);
+
+            if (mode == 1) { // strong mode
+                System.arraycopy(facebbxs, 0, packetContent, headerSize+dataSize, facebbxs.length);
+                System.arraycopy(facefeats, 0, packetContent, headerSize+dataSize+facebbxs.length, facefeats.length);
+            }
+
+            Log.i(TAG, "lat, lon : " + latitude + ", " + longitude);
+
+//            Log.i(TAG, "header length: " + headerSize + " data length: " + dataSize +
+//                    " extra length: " + extraSize + " msg length: " + packetContent.length);
+
+            sceneResUpdated = false;
+
+            if (mode == 1) { // strong mode run all tasks sequentially
+                new socketCreationTask("10.89.28.149", 9999, MainActivity.this).execute(packetContent, data); //10.89.28.149
+            } else {    // weak mode can afford sceneClassifyTask
+                new socketCreationTask("10.89.28.149", 9999, MainActivity.this).execute(packetContent); //10.89.28.149
+                new sceneClassifyTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, data);
+            }
 
         }
     };
@@ -277,73 +353,166 @@ public class MainActivity extends Activity implements AsyncTaskListener {
 
         @Override
         protected Boolean doInBackground(byte[]... data) {
+            // send package content + receive result + scene classification + show result
             try {
-
-                xmax = (orientCase == 0 || orientCase == 2) ? imgSize.height : imgSize.width;
-                ymax = (orientCase == 0 || orientCase == 2) ? imgSize.width : imgSize.height;
-
-                mResultFrm = fdetector.droidJPEGCalibrate(data[0], front1back0, orientCase);
-                byte[] jpeg2sent = mResultFrm;
-
-                float[][] feats; // m x 256
-                int[] faceposs; // length: m x 4
-                int extraSize = 0;
-                byte[] facebbxs = null;
-                byte[] facefeats = null;
-
-                if (mode == 1) { // strong mode
-                    fdetector.clearCache();
-                    jpeg2sent = fdetector.detectAndBlurJPEG(jpeg2sent);
-                    faceposs = fdetector.getBbxPositions();
-                    feats = caffeFace.extractFeaturesCVBatch(fdetector.getAlignedFacesAddr(), "eltwise_fc1");
-                    Log.i(TAG, "faces positions: " + Arrays.toString(faceposs) + ", faces number: " + feats.length);
-                    facebbxs = intToByte(faceposs);
-                    ByteArrayOutputStream facefeatsStream = new ByteArrayOutputStream();
-                    for (float[] array : feats) {
-                        try {
-                            facefeatsStream.write(floatToByte(array));
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                    facefeats = facefeatsStream.toByteArray();
-                    extraSize = facebbxs.length + facefeats.length;
-                }
-
-                // header: 8 integers 2 doubles，6th integer is frame size, 8th integer is face positions and features total size
-                // be careful of big_endian(python side) and little endian(c++ server side)
-                int dataSize = jpeg2sent.length;
-                byte[] headerMisc = intToByte(new int[] {msgtype, front1back0, orientCase, imgSize.width, imgSize.height, dataSize, mode, extraSize});
-                byte[] headerGeo = doubleToByte(new double[] {latitude, longitude});
-
-                int headerSize = headerMisc.length + headerGeo.length;
-                byte[] packetContent = new byte[headerSize + dataSize + extraSize];
-
-                System.arraycopy(headerMisc, 0, packetContent, 0, headerMisc.length);
-                System.arraycopy(headerGeo, 0, packetContent, headerMisc.length, headerGeo.length);
-                System.arraycopy(jpeg2sent, 0, packetContent, headerSize, dataSize);
-
-                if (mode == 1) { // strong mode
-                    System.arraycopy(facebbxs, 0, packetContent, headerSize+dataSize, facebbxs.length);
-                    System.arraycopy(facefeats, 0, packetContent, headerSize+dataSize+facebbxs.length, facefeats.length);
-                }
-
-                Log.i(TAG, "lat, lon : " + latitude + ", " + longitude);
-
-                Log.i(TAG, "header length: " + headerSize + " data length: " + dataSize +
-                        " extra length: " + extraSize + " msg length: " + packetContent.length);
 
                 mSocket = new Socket(desAddress, dstPort);
                 Log.i(TAG, "Socket established");
                 mOutputStream = mSocket.getOutputStream();
                 mInputStream = mSocket.getInputStream();
 
-                sendFrm(packetContent);
+                if (mOutputStream != null) {   // oStream maybe set to null by previous failed asynctask
+                    Log.i(TAG, "mOutputStream is not null, and sendFrm() is running...");
+                    try {
 
+                        long startTime = SystemClock.uptimeMillis();
+                        Log.i(TAG, "start sending...");
+                        mOutputStream.write(data[0]);
+                        mOutputStream.flush();
+                        Log.i(TAG, "finish sending...");
+                        long endTime = SystemClock.uptimeMillis();
+                        Log.i(TAG, String.format("time of sending the frame: %d ms", endTime - startTime));
+
+                        // start receiving data and processing
+                        byte[] headerRES = new byte[8];
+                        int resHeaderSize = 0;
+                        resHeaderSize = mInputStream.read(headerRES);
+                        assert(resHeaderSize == 8);
+
+                        int[] resSizes = byteToInt(headerRES);
+                        Log.i(TAG, Arrays.toString(resSizes));
+
+                        int resSizeTot = resSizes[0] + resSizes[1];
+                        byte[] dataRES = new byte[resSizeTot];
+                        int resDataSize = 0;
+
+                        resDataSize = mInputStream.read(dataRES);
+                        assert(resDataSize == resSizeTot);
+//                        Log.i(TAG, "total result data length: " + dataRES.length);
+
+                        int bbxnum = resSizes[0] / 60 + resSizes[1] / 24;
+                        int[][] bbxposArr = new int[bbxnum][4];
+                        String[] bbxtxtArr = new String[bbxnum];
+                        boolean[] bbxprocArr = new boolean[bbxnum];
+                        int[] bbxproctypeArr = new int[bbxnum];
+
+                        int ibbx = 0;
+
+                        // parse face result
+                        for (int i = 0; i < resSizes[0]; i += 60) {
+                            int[] bbxpos = byteToInt(Arrays.copyOfRange(dataRES, i, i+16));
+                            String username = new String(Arrays.copyOfRange(dataRES, i+16, i+44)).trim();
+                            String facecase = new String(Arrays.copyOfRange(dataRES, i+44, i+46));
+                            int policy = byteToInt(Arrays.copyOfRange(dataRES, i+56, i+60))[0];
+//                            Log.i(TAG, "face bbx: " + Arrays.toString(bbxpos) + ", username: " + username +
+//                                    ", facecase: " + facecase + ", policy: " + policy);
+
+                            if (facecase.equals("c5")) {  // need scene results for decision
+                                String scenes = new String(Arrays.copyOfRange(dataRES, i + 46, i + 56));
+//                                Log.i(TAG, "scenes: " + scenes);
+
+                                // based on scene, make final decision of
+                                // facecase c5(blur) or c6(pass all)
+
+                                if (mode == 1) {
+                                    if (!sceneResUpdated) { // when multiple bbx is c5, only update scene once
+                                        mScene = caffeScene.predictJPEG(front1back0, orientCase, data[1], SCENE_NUM, "com/sh1r0/caffe_android_lib/PredictScore");
+                                        getSceneGrp(mScene);
+                                    }
+                                } else {
+                                    while (!sceneResUpdated) {
+                                        Log.i(TAG, "wait for async scene result");
+                                        try {
+                                            Thread.sleep(100);
+                                        } catch (InterruptedException e) {
+                                            e.printStackTrace();
+                                        }
+                                    }
+                                }
+
+                                facecase = "c6";
+                                for (int j = 0; j < scenes.length(); j ++ ) {
+                                    if (scenes.charAt(j) == '1' ) {
+                                        if (mSceneGrp.contains(j)) {
+                                            facecase = "c5";
+                                            break;
+                                        }
+                                    }
+                                }
+
+                            }
+
+                            bbxpos[0] = Math.max(bbxpos[0], 0);
+                            bbxpos[1] = Math.max(bbxpos[1], 0);
+                            bbxpos[2] = Math.min(bbxpos[2], xmax);
+                            bbxpos[3] = Math.min(bbxpos[3], ymax);
+
+                            bbxposArr[ibbx] = bbxpos;
+                            bbxtxtArr[ibbx] = username + " " + facecase;
+
+                            // c0: not registered user
+                            // c1: no gesture
+                            // c2: yes gesture
+                            // c3: out of distance
+                            // c4: other feature matched
+                            // c5: pass all
+                            // c6: scene matched
+
+                            if (facecase.equals("c0") || facecase.equals("c2") ||
+                                    facecase.equals("c3") || facecase.equals("c6"))
+                                bbxprocArr[ibbx] = false;
+                            else
+                                bbxprocArr[ibbx] = true;
+
+                            bbxproctypeArr[ibbx] = policy;
+                            ibbx += 1;
+                        }
+
+                        // parse hand result
+                        for (int i = resSizes[0]; i < resDataSize; i += 24) {
+                            int[] bbxpos = byteToInt(Arrays.copyOfRange(dataRES, i, i+16));
+                            int bbxcls = byteToInt(Arrays.copyOfRange(dataRES, i+16, i+20))[0];
+                            float scr = ByteBuffer.wrap(Arrays.copyOfRange(dataRES, i+20, i+24)).order(ByteOrder.LITTLE_ENDIAN).getFloat();
+//                            Log.i(TAG, "hand bbx: " + Arrays.toString(bbxpos) + ", class: "
+//                                    + bbxcls + ", score: " + scr);
+
+                            bbxpos[0] = Math.max(bbxpos[0], 0);
+                            bbxpos[1] = Math.max(bbxpos[1], 0);
+                            bbxpos[2] = Math.min(bbxpos[2], xmax);
+                            bbxpos[3] = Math.min(bbxpos[3], ymax);
+
+                            bbxposArr[ibbx] = bbxpos;
+                            bbxtxtArr[ibbx] = (bbxcls == 2 ? "yes" : (bbxcls == 3 ? "no" : "normal")) + " " + scr;
+                            bbxprocArr[ibbx] = false;
+                            bbxproctypeArr[ibbx] = 2;
+                            ibbx += 1;
+                        }
+
+                        // pass to jni for image processing
+                        if (bbxnum > 0)
+                            mResultFrm = fdetector.boxesProcess(mResultFrm, bbxposArr, bbxtxtArr, bbxprocArr, bbxproctypeArr);
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        if (mSocket != null) {
+                            Log.i(TAG, "Connection lost.");
+                            try {
+                                mOutputStream.close();
+                                mSocket.close();
+                                mOutputStream = null;
+                                mSocket = null;
+                            } catch (IOException e1) {
+                                e1.printStackTrace();
+                            }
+                        }
+                        //Log.i(TAG, "Asynctask - " + tskId + " failed.");
+                    }
+                }
             } catch (IOException e) {
                 e.printStackTrace();
                 return false;
             }
+
             return true;
         }
 
@@ -353,169 +522,29 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         }
     }
 
-    private void sendFrm(byte[] packetContent) {
-        if (mOutputStream != null) {   // oStream maybe set to null by previous failed asynctask
-            Log.i(TAG, "mOutputStream is not null, and sendFrm() is running...");
-            try {
-
-                long startTime = SystemClock.uptimeMillis();
-                Log.i(TAG, "start sending...");
-                mOutputStream.write(packetContent);
-                mOutputStream.flush();
-                Log.i(TAG, "finish sending...");
-
-                long endTime = SystemClock.uptimeMillis();
-                Log.i(TAG, String.format("time of sending the frame: %d ms", endTime - startTime));
-
-
-                // start receiving data and processing
-                receiveFrm();
-
-            } catch (IOException e) {
-                e.printStackTrace();
-                if (mSocket != null) {
-                    Log.i(TAG, "Connection lost.");
-                    try {
-                        mOutputStream.close();
-                        mSocket.close();
-                        mOutputStream = null;
-                        mSocket = null;
-                    } catch (IOException e1) {
-                        e1.printStackTrace();
-                    }
-                }
-                //Log.i(TAG, "Asynctask - " + tskId + " failed.");
-            }
-        } else {
-            //Log.i(TAG, "Asynctask - " + tskId + " skipped.");
+    private class sceneClassifyTask extends AsyncTask<byte[], Void, Boolean> {
+        @Override
+        protected Boolean doInBackground(byte[]... data) {
+            Log.i(TAG, "sceneClassifyTask start running ...");
+            mScene = caffeScene.predictJPEG(front1back0, orientCase, data[0], SCENE_NUM, "com/sh1r0/caffe_android_lib/PredictScore");
+            return true;
         }
 
-    }
-
-    private void receiveFrm() {
-        try {
-            Log.i(TAG, "receiveFrm() is called...");
-            byte[] headerRES = new byte[8];
-            int resHeaderSize = 0;
-            resHeaderSize = mInputStream.read(headerRES);
-            assert(resHeaderSize == 8);
-
-            int[] resSizes = byteToInt(headerRES);
-            Log.i(TAG, Arrays.toString(resSizes));
-
-            int resSizeTot = resSizes[0] + resSizes[1];
-            byte[] dataRES = new byte[resSizeTot];
-            int resDataSize = 0;
-
-            resDataSize = mInputStream.read(dataRES);
-            assert(resDataSize == resSizeTot);
-            Log.i(TAG, "total result data length: " + dataRES.length);
-
-            int bbxnum = resSizes[0] / 60 + resSizes[1] / 24;
-            int[][] bbxposArr = new int[bbxnum][4];
-            String[] bbxtxtArr = new String[bbxnum];
-            boolean[] bbxprocArr = new boolean[bbxnum];
-            int[] bbxproctypeArr = new int[bbxnum];
-
-            int ibbx = 0;
-
-            // parse face result
-            for (int i = 0; i < resSizes[0]; i += 60) {
-                int[] bbxpos = byteToInt(Arrays.copyOfRange(dataRES, i, i+16));
-                String username = new String(Arrays.copyOfRange(dataRES, i+16, i+44)).trim();
-                String facecase = new String(Arrays.copyOfRange(dataRES, i+44, i+46));
-                int policy = byteToInt(Arrays.copyOfRange(dataRES, i+56, i+60))[0];
-                Log.i(TAG, "face bbx: " + Arrays.toString(bbxpos) + ", username: " + username +
-                        ", facecase: " + facecase + ", policy: " + policy);
-
-                if (facecase.equals("c5")) {  // need scene results for decision
-                    String scenes = new String(Arrays.copyOfRange(dataRES, i + 46, i + 56));
-                    Log.i(TAG, "scenes: " + scenes);
-
-                    // based on scene, make final decision of
-                    // facecase c6(blur) or c5(don't blur)
-
-                    while (sceneTaskFinished == false) { // wait for results from scene
-                        Log.i(TAG, "waiting for sceneTask");
-                        Thread.sleep(1000);
-
-                    }
-
-                    for (int j = 0; j < scenes.length(); j ++ ) {
-                        if (scenes.charAt(j) == '1' ) {
-                            if (mSceneGrp.contains(j)) {
-                                facecase = "c6";
-                                break;
-                            }
-                        }
-
-                    }
-
-                }
-
-                bbxpos[0] = Math.max(bbxpos[0], 0);
-                bbxpos[1] = Math.max(bbxpos[1], 0);
-                bbxpos[2] = Math.min(bbxpos[2], xmax);
-                bbxpos[3] = Math.min(bbxpos[3], ymax);
-
-                bbxposArr[ibbx] = bbxpos;
-                bbxtxtArr[ibbx] = username + " " + facecase;
-
-                // c0: not registered user
-                // c1: no gesture
-                // c2: yes gesture
-                // c3: out of distance
-                // c4: other feature matched
-                // c5: pass all
-                // c6: scene matched
-
-                if (facecase.equals("c0") || facecase.equals("c2") ||
-                        facecase.equals("c3") || facecase.equals("c5"))
-                    bbxprocArr[ibbx] = false;
-                else
-                    bbxprocArr[ibbx] = true;
-
-                bbxproctypeArr[ibbx] = policy;
-                ibbx += 1;
-            }
-
-            // parse hand result
-            for (int i = resSizes[0]; i < resDataSize; i += 24) {
-                int[] bbxpos = byteToInt(Arrays.copyOfRange(dataRES, i, i+16));
-                int bbxcls = byteToInt(Arrays.copyOfRange(dataRES, i+16, i+20))[0];
-                float scr = ByteBuffer.wrap(Arrays.copyOfRange(dataRES, i+20, i+24)).order(ByteOrder.LITTLE_ENDIAN).getFloat();
-                Log.i(TAG, "hand bbx: " + Arrays.toString(bbxpos) + ", class: "
-                        + bbxcls + ", score: " + scr);
-
-                bbxpos[0] = Math.max(bbxpos[0], 0);
-                bbxpos[1] = Math.max(bbxpos[1], 0);
-                bbxpos[2] = Math.min(bbxpos[2], xmax);
-                bbxpos[3] = Math.min(bbxpos[3], ymax);
-
-                bbxposArr[ibbx] = bbxpos;
-                bbxtxtArr[ibbx] = (bbxcls == 2 ? "yes" : (bbxcls == 3 ? "no" : "normal")) + " " + scr;
-                bbxprocArr[ibbx] = false;
-                bbxproctypeArr[ibbx] = 2;
-                ibbx += 1;
-            }
-
-            // pass to jni for image processing
-            if (bbxnum > 0)
-                mResultFrm = fdetector.boxesProcess(mResultFrm, bbxposArr, bbxtxtArr, bbxprocArr, bbxproctypeArr);
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        @Override
+        protected void onPostExecute(Boolean success) {
+            getSceneGrp(mScene);
         }
-
-
     }
 
     private void display() {
         mImageView.setVisibility(View.VISIBLE);
+        csfGrpResView.setVisibility(View.VISIBLE);
         mFabBtnYes.setVisibility(View.VISIBLE);
         mFabBtnNo.setVisibility(View.VISIBLE);
+
+        csfGrpResView.setText(csfGrpTxt);
+        csfGrpResView.setTextColor(Color.BLUE);
+        csfGrpResView.setTypeface(csfGrpResView.getTypeface(), Typeface.BOLD);
 
         Bitmap bitmap = BitmapFactory.decodeByteArray(mResultFrm, 0, mResultFrm.length);
 
@@ -528,26 +557,6 @@ public class MainActivity extends Activity implements AsyncTaskListener {
 
         bitmap = Bitmap.createBitmap(bitmap , 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
         mImageView.setImageBitmap(bitmap);
-    }
-
-
-    private class sceneTask extends AsyncTask<byte[], Void, Boolean> {
-
-        @Override
-        protected Boolean doInBackground(byte[]... frmdata) {
-            Log.i(TAG, "sceneTask is running...");
-            // predict scene with finetuned model
-            mScene = caffeScene.predictFrame(imgSize.width, imgSize.height, front1back0, orientCase, frmdata[0], SCENE_NUM, "com/sh1r0/caffe_android_lib/PredictScore");
-
-            getSceneGrp(mScene);
-
-            return true;
-        }
-
-        @Override
-        protected void onPostExecute(Boolean success) {
-            sceneTaskFinished = true;
-        }
     }
 
     private void getSceneGrp(PredictScore[] scene) {
@@ -592,12 +601,16 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         grpScores = sortByValue(grpScores);
 
         mSceneGrp = new ArrayList<>();
+        csfGrpTxt = "Group - Score\n--------------------\n";
         for (Map.Entry<String, Float> eachGrpScr : grpScores.entrySet()) {
-            Log.i(TAG, String.format("%1$s    %2$.3f\n", eachGrpScr.getKey(), eachGrpScr.getValue()));
+//            Log.i(TAG, String.format("%1$s    %2$.3f\n", eachGrpScr.getKey(), eachGrpScr.getValue()));
             if (eachGrpScr.getValue() > 0.3) { // threshold is set to 0.3
+                csfGrpTxt += String.format("%1$s    %2$.3f\n", eachGrpScr.getKey(), eachGrpScr.getValue());
                 mSceneGrp.add(grpName.indexOf(eachGrpScr.getKey()));
             }
         }
+
+        sceneResUpdated = true;
 
 /** scores for top k categories
  *
