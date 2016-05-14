@@ -130,7 +130,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
     private GoogleApiClient mGoogleApiClient;
     protected Location mLastLocation;
     private double latitude, longitude;
-    private boolean sceneTaskFinished = false;
+    private boolean sceneResUpdated = false;
 
     static {
         System.loadLibrary("facedet");
@@ -272,6 +272,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
             // prepare package content and pass package content and data (for scene classification)
             // to asynctask
 
+
             Log.i(TAG, Integer.toString(data.length));
             xmax = (orientCase == 0 || orientCase == 2) ? imgSize.height : imgSize.width;
             ymax = (orientCase == 0 || orientCase == 2) ? imgSize.width : imgSize.height;
@@ -326,6 +327,8 @@ public class MainActivity extends Activity implements AsyncTaskListener {
 
 //            Log.i(TAG, "header length: " + headerSize + " data length: " + dataSize +
 //                    " extra length: " + extraSize + " msg length: " + packetContent.length);
+
+            sceneResUpdated = false;
 
             if (mode == 1) { // strong mode run all tasks sequentially
                 new socketCreationTask("10.89.28.149", 9999, MainActivity.this).execute(packetContent, data); //10.89.28.149
@@ -412,10 +415,12 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                                 // facecase c5(blur) or c6(pass all)
 
                                 if (mode == 1) {
-                                    mScene = caffeScene.predictJPEG(front1back0, orientCase, data[1], SCENE_NUM, "com/sh1r0/caffe_android_lib/PredictScore");
-                                    getSceneGrp(mScene);
+                                    if (!sceneResUpdated) { // when multiple bbx is c5, only update scene once
+                                        mScene = caffeScene.predictJPEG(front1back0, orientCase, data[1], SCENE_NUM, "com/sh1r0/caffe_android_lib/PredictScore");
+                                        getSceneGrp(mScene);
+                                    }
                                 } else {
-                                    while (!sceneTaskFinished) {
+                                    while (!sceneResUpdated) {
                                         Log.i(TAG, "wait for async scene result");
                                         try {
                                             Thread.sleep(100);
@@ -423,7 +428,6 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                                             e.printStackTrace();
                                         }
                                     }
-                                    sceneTaskFinished = false;
                                 }
 
                                 facecase = "c6";
@@ -523,14 +527,12 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         protected Boolean doInBackground(byte[]... data) {
             Log.i(TAG, "sceneClassifyTask start running ...");
             mScene = caffeScene.predictJPEG(front1back0, orientCase, data[0], SCENE_NUM, "com/sh1r0/caffe_android_lib/PredictScore");
-            getSceneGrp(mScene);
-
             return true;
         }
 
         @Override
         protected void onPostExecute(Boolean success) {
-            sceneTaskFinished = true;
+            getSceneGrp(mScene);
         }
     }
 
@@ -541,7 +543,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         mFabBtnNo.setVisibility(View.VISIBLE);
 
         csfGrpResView.setText(csfGrpTxt);
-        csfGrpResView.setTextColor(Color.GREEN);
+        csfGrpResView.setTextColor(Color.BLUE);
         csfGrpResView.setTypeface(csfGrpResView.getTypeface(), Typeface.BOLD);
 
         Bitmap bitmap = BitmapFactory.decodeByteArray(mResultFrm, 0, mResultFrm.length);
@@ -607,6 +609,8 @@ public class MainActivity extends Activity implements AsyncTaskListener {
                 mSceneGrp.add(grpName.indexOf(eachGrpScr.getKey()));
             }
         }
+
+        sceneResUpdated = true;
 
 /** scores for top k categories
  *
