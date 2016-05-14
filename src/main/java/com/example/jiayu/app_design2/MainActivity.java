@@ -194,6 +194,7 @@ public class MainActivity extends Activity implements AsyncTaskListener {
         });
 
         mImageView = (ImageView) findViewById(R.id.imageView);
+        mImageView.setBackgroundColor(Color.rgb(0,0,0));
         mImageView.setVisibility(View.INVISIBLE);
 
         csfGrpResView = (TextView) findViewById(R.id.csfGrpRes);
@@ -532,8 +533,6 @@ public class MainActivity extends Activity implements AsyncTaskListener {
             sceneTaskFinished = true;
         }
     }
-
-
 
     private void display() {
         mImageView.setVisibility(View.VISIBLE);
