@@ -331,9 +331,9 @@ public class MainActivity extends Activity implements AsyncTaskListener {
             sceneResUpdated = false;
 
             if (mode == 1) { // strong mode run all tasks sequentially
-                new socketCreationTask("10.89.28.149", 9999, MainActivity.this).execute(packetContent, data); //10.89.28.149
+                new socketCreationTask("172.20.10.10", 9999, MainActivity.this).execute(packetContent, data); //10.89.28.149
             } else {    // weak mode can afford sceneClassifyTask
-                new socketCreationTask("10.89.28.149", 9999, MainActivity.this).execute(packetContent); //10.89.28.149
+                new socketCreationTask("172.20.10.10", 9999, MainActivity.this).execute(packetContent); //10.89.28.149
                 new sceneClassifyTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, data);
             }
 

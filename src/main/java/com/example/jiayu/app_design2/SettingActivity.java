@@ -160,7 +160,7 @@ public class SettingActivity extends PreferenceActivity implements AsyncTaskList
         mOk.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v){
-                new socketCreationTask("10.89.28.149", 9999, SettingActivity.this).execute();
+                new socketCreationTask("172.20.10.10", 9999, SettingActivity.this).execute();
 
             }
         });
